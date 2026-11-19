@@ -7,7 +7,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | Version | Theme | Driven by |
 |---|---|---|
 | **v0.0** (done) | Vision and decisions | — |
-| **v0.1** (in progress) | Extraction: open-crank runs on open-tick | open-crank |
+| **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank |
 | **v0.2** | Second consumer: open-robots in SIL | open-robots |
 | **v0.3** | First signal-level bridge: Raspberry Pi Pico (PIO) | open-robots |
 | **v0.4** | Tang Nano 20K bridge: tooth wheels and injector capture | open-crank Level 2 |
@@ -30,14 +30,14 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 **In scope.** The pieces listed in [VISION.md §6](VISION.md#6-what-moves-out-of-open-crank-and-what-has-to-change): timebase, paced and free-run drivers, in-memory and SocketCAN bridges, scenario parser with a registered signal table, trace writer with registered columns. The timebase decision (VISION.md, open question 2) is taken here.
 
-**Status: in progress.** open-tick's side exists and is tested ([ARCHITECTURE.md](ARCHITECTURE.md)). A trial port of open-crank meets criteria 1 and 2 ([docs/open-crank-integration.md](docs/open-crank-integration.md)). They count as met when open-crank's own pull request passes its CI.
+**Status: done** (2026-11-19). Every exit criterion was met in CI on [open-crank#1](https://github.com/Open-Heavy-Machinery/open-crank/pull/1), merged as `ff4b02c`. The record is in [docs/open-crank-integration.md](docs/open-crank-integration.md).
 
 **Exit criteria**
 
-1. open-crank's closed-loop tests and all 18 mutation checks pass against open-tick. *Trial run: yes (one mutation moved to open-tick and was replaced by one on open-crank's binding).*
-2. Every scenario in open-crank produces a trace that is bit-identical to the one from before the move. *Trial run: yes, all six.*
-3. open-tick includes nothing from any application, and CI checks this. *Done: [`tools/check_deps.sh`](tools/check_deps.sh).*
-4. open-crank's `vcan` demo works as its README describes. *Not yet run: no `vcan` on the trial machine.*
+- [x] 1. open-crank's closed-loop tests and all 18 mutation checks pass against open-tick. *One mutation moved to open-tick with the parser and was replaced by one on open-crank's binding to the player.*
+- [x] 2. Every scenario in open-crank produces a trace that is bit-identical to the one from before the move. *All six, compared byte for byte by open-crank's new `traces` CI job against `main`.*
+- [x] 3. open-tick includes nothing from any application, and CI checks this. *[`tools/check_deps.sh`](tools/check_deps.sh).*
+- [x] 4. open-crank's `vcan` demo works as its README describes. *open-crank's new `vcan-demo` CI job runs it as two processes: the controller reaches RUN and holds 1500 rpm within 1 % with and without the hoist load.*
 
 ## v0.2: Second consumer
 

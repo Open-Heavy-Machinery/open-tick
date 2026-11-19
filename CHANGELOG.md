@@ -2,7 +2,7 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## [Unreleased]: 0.1.0, extraction
+## [0.1.0] (2026-11-19): extraction
 
 ### Added
 
@@ -20,7 +20,7 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
   - `socketcan.h`: SocketCAN bridge for classic CAN and CAN FD.
 - `otk-flywheel`, an example that uses every module, run as a test for determinism and pacing.
 - Tests, a dependency check (`tools/check_deps.sh`), a mutation check with 18 mutations (`tools/mutation_check.sh`), and CI: gcc and clang, Debug and Release, sanitizers, core-only build on macOS, SocketCAN on `vcan`.
-- [ARCHITECTURE.md](ARCHITECTURE.md), and the plan and trial run for open-crank's integration ([docs/open-crank-integration.md](docs/open-crank-integration.md)).
+- [ARCHITECTURE.md](ARCHITECTURE.md), and the record of open-crank's integration ([docs/open-crank-integration.md](docs/open-crank-integration.md)): open-crank runs on this release as a git submodule since [open-crank#1](https://github.com/Open-Heavy-Machinery/open-crank/pull/1).
 
 ### Extracted from open-crank v0.1 (`bbe87f5`)
 

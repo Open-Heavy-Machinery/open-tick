@@ -143,7 +143,7 @@ target_link_libraries(my_sil PRIVATE opentick::host)   # Linux
 
 Compile settings (C11, no extensions, warnings) are set on open-tick's own targets only, so a parent project's flags are left alone.
 
-How open-crank will consume it, and what that changes in open-crank, is in [docs/open-crank-integration.md](docs/open-crank-integration.md).
+open-crank consumes it as a git submodule in `external/open-tick`; what that changed in open-crank, and how it was verified, is in [docs/open-crank-integration.md](docs/open-crank-integration.md).
 
 ## 5. Tests
 

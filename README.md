@@ -2,9 +2,9 @@
 
 > The beat a simulated machine keeps. One clock, one step, any machine behind your microcontroller's pins, and an exact statement of how faithful it is.
 
-Part of [Open Heavy Machinery](https://open-heavy-machinery.github.io): open tools to practise and develop embedded control for machines you do not have.
+Part of [Open Heavy Machinery](https://open-heavy-machinery.github.io) ([open-tick's page](https://open-heavy-machinery.github.io/open-tick/)): open tools to practise and develop embedded control for machines you cannot keep at home, starting with heavy machinery.
 
-**Status: pre-alpha, v0.1 (extraction) in progress.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) now exist here as a library, with tests. A trial port of open-crank on top of it produces byte-identical traces ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
+**Status: pre-alpha. v0.1 (extraction) is done.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) live here as a library, and open-crank runs on it as a git submodule, with traces byte-identical to before the move ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
 
 ## What it is
 
