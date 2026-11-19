@@ -1,6 +1,6 @@
 # open-tick: vision
 
-> **Status: v0.1 (extraction) in progress.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
+> **Status: v0.1 (extraction) done; v0.2 next.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
 
 ## 1. The idea in one paragraph
 
@@ -102,11 +102,11 @@ flowchart BT
 
 | Bridge | Link to the core | Transports | Status |
 |---|---|---|---|
-| in-memory | same process | message | exists in open-crank (`loop.c`) |
-| host | SocketCAN, serial port | message | SocketCAN exists in open-crank; serial planned |
+| in-memory | same process | message | v0.1 (CAN queues; open-crank's loop uses them) |
+| host | SocketCAN, serial port | message | SocketCAN v0.1 (classic and CAN FD); serial planned |
 | **Raspberry Pi Pico (RP2040 / RP2350, PIO)** | USB | signal-level | planned, first for **open-robots** |
 | **Tang Nano 20K (Gowin GW2AR-18)** | USB | signal-level | planned, first for **open-crank** |
-| Renode | lockstep, virtual time | message (later signal-level) | open-crank Track R, moves here |
+| Renode | lockstep, virtual time | message (later signal-level) | Track R (moved here from open-crank) |
 
 - **Pico for open-robots.** It costs about 5 USD, and its PIO state machines produce and capture edges with clock-cycle resolution. A four-motor robot needs about four quadrature outputs and four PWM-plus-direction captures. The RP2040 has 8 state machines and the RP2350 has 12; the first spike confirms whether the whole robot fits in one Pico.
 - **Tang Nano 20K for open-crank.** The edge rates are not the hard part: a 60−2 wheel at 2,200 rpm gives about 2.2 kHz of teeth. The hard part is the number of independent timed channels open-crank's Level 2 needs at once: crank, cam, one capture per injector, analog outputs, and room for a second engine. Many parallel channels, each with its own timing, is what an FPGA is for.
