@@ -1,7 +1,10 @@
 name: ci
 
+# Pull requests run on pull_request; main runs on push. Pushing a branch
+# that has a pull request no longer runs everything twice.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
