@@ -1,6 +1,6 @@
 # open-tick: vision
 
-> **Status: vision. There is no code yet.** This document records the decisions taken so far and the reasons for them, so that the code that follows has something to be checked against. Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
+> **Status: v0.1 (extraction) in progress.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
 
 ## 1. The idea in one paragraph
 
@@ -81,7 +81,7 @@ flowchart BT
 - **In hard mode, the bridge is the clock.** It tells the core when to step and timestamps everything the DUT does on the same timebase. Exactly one clock is authoritative in any run.
 - **Every signal has exactly one owner, simulated or real.** This rule comes from open-crank's roadmap; open-tick enforces it when a machine is wired.
 - **Determinism is promised only where it can be kept.** With real silicon in the loop, runs are not bit-identical, so the hard driver measures jitter and latency and writes them into the trace instead.
-- **A change from open-crank:** open-crank counts time in `uint32_t` milliseconds, which is enough for message transports. Signal-level transports timestamp edges in microseconds or finer, so the core's timebase has to get wider (see open question 2). Applications keep their own step periods.
+- **A change from open-crank:** open-crank counts time in `uint32_t` milliseconds, which is enough for message transports. Signal-level transports timestamp edges in microseconds or finer, so the core's timebase is `uint64_t` nanoseconds (decided in v0.1; see [ARCHITECTURE.md](ARCHITECTURE.md), §3.1). Applications keep their own step periods and units.
 
 ### 5.2 Two kinds of transport
 
@@ -160,7 +160,7 @@ signals:
 
 ## 6. What moves out of open-crank, and what has to change
 
-The current code (open-crank v0.1) already separates most of this. The table says what each piece becomes and what stands in the way.
+The current code (open-crank v0.1) already separates most of this. The table says what each piece becomes and what stands in the way. The extraction is done in open-tick v0.1; the trial run against open-crank is recorded in [docs/open-crank-integration.md](docs/open-crank-integration.md).
 
 | open-crank today | In open-tick | Change needed |
 |---|---|---|
@@ -168,7 +168,7 @@ The current code (open-crank v0.1) already separates most of this. The table say
 | wall-clock pacer, `platforms/linux-socketcan/pacer.c` | paced driver | none expected |
 | in-memory loop, `sim/runtime/loop.c` | free-run driver and in-memory bridge | queues of `J1939Frame` become a generic CAN frame; the J1939 meaning stays in open-crank |
 | scenario parser, `sim/runtime/scenario.c` | scenario parser | signal names: fixed `OcSignalId` enum → table registered by the application |
-| CSV trace, `sim/runtime/trace.c` | trace writer | columns: hard-coded → registered by the application; adds bridge timing columns |
+| CSV trace, `sim/runtime/trace.c` | trace writer | columns: hard-coded → registered by the application (bridge timing columns come with the hard driver, v0.3) |
 | SocketCAN glue, `platforms/linux-socketcan/socketcan.c` | host bridge, CAN | none expected |
 
 **What stays in open-crank:** the plant core, loads, simulated engine ECU, J1939 codec, reference machine controller, the `d936la6` plant, the scenario files and the bench itself (as open-crank's machine).
@@ -191,8 +191,8 @@ Honest non-goals. Revisit them; do not quietly break them.
 ## 8. Open questions
 
 1. **Host-to-bridge link and protocol.** USB CDC on the Pico; on the Tang Nano 20K, its on-board USB-UART or an external USB chip. Measure throughput and latency first, before anything depends on them, as open-crank v0.2 does with its USB-CAN adapter.
-2. **Timebase width.** Proposal: `uint64_t` nanoseconds in the core, with the bridge's clock mapped onto it. Decide before the extraction freezes the API.
+2. **Timebase width.** *Decided in v0.1:* `uint64_t` nanoseconds in the core, with the bridge's clock mapped onto it ([ARCHITECTURE.md](ARCHITECTURE.md), §3.1).
 3. **Tang Nano 20K toolchain.** Is the open toolchain (Yosys, nextpnr, Apicula) mature enough for the GW2AR-18, or does the gateware need Gowin's IDE? This decides whether the project can promise an all-open build.
 4. **Where device models live.** IMU register maps and motor-driver behaviour: in open-tick as a shared library, or in each application?
-5. **Repository and build mechanics.** How applications consume open-tick (CMake `FetchContent`, a submodule, an installed package), and how CI checks the one-way dependency across repositories.
+5. **Repository and build mechanics.** How applications consume open-tick (CMake `FetchContent`, a submodule, an installed package), and how CI checks the one-way dependency across repositories. v0.1 builds as a subproject either way; the choice for open-crank is laid out in [docs/open-crank-integration.md](docs/open-crank-integration.md).
 6. **Language bindings.** C11 core as in open-crank; Python bindings for scripting scenarios stay in the backlog until someone needs them.

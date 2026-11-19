@@ -6,8 +6,8 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 | Version | Theme | Driven by |
 |---|---|---|
-| **v0.0** (this) | Vision and decisions, no code | — |
-| **v0.1** | Extraction: open-crank runs on open-tick | open-crank |
+| **v0.0** (done) | Vision and decisions | — |
+| **v0.1** (in progress) | Extraction: open-crank runs on open-tick | open-crank |
 | **v0.2** | Second consumer: open-robots in SIL | open-robots |
 | **v0.3** | First signal-level bridge: Raspberry Pi Pico (PIO) | open-robots |
 | **v0.4** | Tang Nano 20K bridge: tooth wheels and injector capture | open-crank Level 2 |
@@ -30,12 +30,14 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 **In scope.** The pieces listed in [VISION.md §6](VISION.md#6-what-moves-out-of-open-crank-and-what-has-to-change): timebase, paced and free-run drivers, in-memory and SocketCAN bridges, scenario parser with a registered signal table, trace writer with registered columns. The timebase decision (VISION.md, open question 2) is taken here.
 
+**Status: in progress.** open-tick's side exists and is tested ([ARCHITECTURE.md](ARCHITECTURE.md)). A trial port of open-crank meets criteria 1 and 2 ([docs/open-crank-integration.md](docs/open-crank-integration.md)). They count as met when open-crank's own pull request passes its CI.
+
 **Exit criteria**
 
-1. open-crank's closed-loop tests and all 18 mutation checks pass against open-tick.
-2. Every scenario in open-crank produces a trace that is bit-identical to the one from before the move.
-3. open-tick includes nothing from any application, and CI checks this.
-4. open-crank's `vcan` demo works as its README describes.
+1. open-crank's closed-loop tests and all 18 mutation checks pass against open-tick. *Trial run: yes (one mutation moved to open-tick and was replaced by one on open-crank's binding).*
+2. Every scenario in open-crank produces a trace that is bit-identical to the one from before the move. *Trial run: yes, all six.*
+3. open-tick includes nothing from any application, and CI checks this. *Done: [`tools/check_deps.sh`](tools/check_deps.sh).*
+4. open-crank's `vcan` demo works as its README describes. *Not yet run: no `vcan` on the trial machine.*
 
 ## v0.2: Second consumer
 
