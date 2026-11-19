@@ -1,0 +1,6 @@
+# A small valid scenario for the loader test.
+time_s,signal,value
+0.0,key_on,1
+0.5,start,1
+1.0,start,0
+2.0,end,0

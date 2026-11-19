@@ -1,0 +1,5 @@
+# A typo in a signal name must fail loudly, with its line number.
+time_s,signal,value
+0.0,key_on,1
+1.0,tagret_rpm,1200
+2.0,end,0

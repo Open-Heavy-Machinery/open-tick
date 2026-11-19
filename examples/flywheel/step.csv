@@ -1,0 +1,9 @@
+# otk-flywheel: spin up, take a load, change speed, then lose the speed
+# frames. The controller must drop to its safe state (no drive) once its
+# speed feedback is stale, and the flywheel coasts down.
+time_s,signal,value
+0.0,target_rpm,1500
+1.5,load_nm,0.3
+3.0,target_rpm,2000
+4.0,fault.speed_lost,1
+5.0,end,0
