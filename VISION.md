@@ -1,6 +1,6 @@
 # open-tick: vision
 
-> **Status: v0.1 (extraction) done; v0.2 next.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
+> **Status: v0.1 (extraction) done; v0.2 (oracle) next, pulled by open-crank v0.2.1.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
 
 ## 1. The idea in one paragraph
 
@@ -103,9 +103,9 @@ flowchart BT
 | Bridge | Link to the core | Transports | Status |
 |---|---|---|---|
 | in-memory | same process | message | v0.1 (CAN queues; open-crank's loop uses them) |
-| host | SocketCAN, serial port | message | SocketCAN v0.1 (classic and CAN FD); serial planned |
-| **Raspberry Pi Pico (RP2040 / RP2350, PIO)** | USB | signal-level | planned, first for **open-robots** |
-| **Tang Nano 20K (Gowin GW2AR-18)** | USB | signal-level | planned, first for **open-crank** |
+| host | SocketCAN, serial port | message | SocketCAN v0.1 (classic and CAN FD); serial planned, when an application needs it |
+| **Raspberry Pi Pico (RP2040 / RP2350, PIO)** | USB | signal-level | when open-robots starts |
+| **Tang Nano 20K (Gowin GW2AR-18)** | USB | signal-level | planned: open-tick v0.4, for open-crank v0.4 (first signal-level bridge) |
 | Renode | lockstep, virtual time | message (later signal-level) | Track R (moved here from open-crank) |
 
 - **Pico for open-robots.** It costs about 5 USD, and its PIO state machines produce and capture edges with clock-cycle resolution. A four-motor robot needs about four quadrature outputs and four PWM-plus-direction captures. The RP2040 has 8 state machines and the RP2350 has 12; the first spike confirms whether the whole robot fits in one Pico.
@@ -168,7 +168,7 @@ The current code (open-crank v0.1) already separates most of this. The table say
 | wall-clock pacer, `platforms/linux-socketcan/pacer.c` | paced driver | none expected |
 | in-memory loop, `sim/runtime/loop.c` | free-run driver and in-memory bridge | queues of `J1939Frame` become a generic CAN frame; the J1939 meaning stays in open-crank |
 | scenario parser, `sim/runtime/scenario.c` | scenario parser | signal names: fixed `OcSignalId` enum → table registered by the application |
-| CSV trace, `sim/runtime/trace.c` | trace writer | columns: hard-coded → registered by the application (bridge timing columns come with the hard driver, v0.3) |
+| CSV trace, `sim/runtime/trace.c` | trace writer | columns: hard-coded → registered by the application (bridge timing columns come with the hard driver, v0.4) |
 | SocketCAN glue, `platforms/linux-socketcan/socketcan.c` | host bridge, CAN | none expected |
 
 **What stays in open-crank:** the plant core, loads, simulated engine ECU, J1939 codec, reference machine controller, the `d936la6` plant, the scenario files and the bench itself (as open-crank's machine).
@@ -187,6 +187,7 @@ Honest non-goals. Revisit them; do not quietly break them.
 - **Not an MCU emulator.** Renode and others do that; open-tick drives them in lockstep.
 - **Not a general robotics simulator.** Gazebo, MuJoCo and others exist; bridging to them is possible later.
 - **Not every machine at once.** Nothing is generalised until a second application needs it.
+- **Not ahead of its applications.** open-tick builds only what an application's current milestone needs (the pull rule in [ROADMAP.md](ROADMAP.md)).
 
 ## 8. Open questions
 

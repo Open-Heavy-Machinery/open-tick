@@ -2,18 +2,20 @@
 
 Scope is deliberately narrow, as in open-crank. Each milestone is small enough to finish and useful on its own. **There are no dates**: a milestone is done when its exit criteria are met. The reasons behind the milestones are in [VISION.md](VISION.md).
 
+**Pull rule.** open-tick grows only when an application needs it in its current milestone. Today that application is open-crank, the organisation's priority. Every milestone below names the application milestone that pulls it. Work for sibling applications that have not started is listed at the end, without version numbers.
+
 ## At a glance
 
-| Version | Theme | Driven by |
+| Version | Theme | Pulled by |
 |---|---|---|
 | **v0.0** (done) | Vision and decisions | — |
-| **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank |
-| **v0.2** | Second consumer: open-robots in SIL | open-robots |
-| **v0.3** | First signal-level bridge: Raspberry Pi Pico (PIO) | open-robots |
-| **v0.4** | Tang Nano 20K bridge: tooth wheels and injector capture | open-crank Level 2 |
-| **v0.5** | Profiles: YAML compiled to C | open-crank |
-| **Track R** | Renode virtual-time driver (parallel) | open-crank |
-| **Track S** | Register-mapped slaves: I²C / SPI (parallel, after v0.3) | open-robots |
+| **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank v0.1 |
+| **v0.2** | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
+| **v0.3** | Transport faults | open-crank v0.3 |
+| **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
+| **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
+| **Track R** | Renode virtual-time driver (parallel) | open-crank Track R |
+| **When a sibling starts** | open-robots in SIL, Raspberry Pi Pico bridge, register-mapped slaves | open-robots |
 
 ## Definition of done (every release)
 
@@ -21,6 +23,8 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 - The README's build and run instructions work verbatim.
 - Every consumer's tests still pass against the released open-tick.
 - No claim in the docs is stronger than what the code and tests support.
+- Every milestone names the application milestone that pulls it.
+- Every change to a public API keeps `otk-flywheel` building and its tests passing, so the core does not drift towards J1939.
 
 ---
 
@@ -39,7 +43,91 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 - [x] 3. open-tick includes nothing from any application, and CI checks this. *[`tools/check_deps.sh`](tools/check_deps.sh).*
 - [x] 4. open-crank's `vcan` demo works as its README describes. *open-crank's new `vcan-demo` CI job runs it as two processes: the controller reaches RUN and holds 1500 rpm within 1 % with and without the hoist load.*
 
-## v0.2: Second consumer
+## v0.2: Oracle
+
+**Goal.** Grade any DUT only by what is observable on its transports, with reaction times measured from the injected event and invariants checked over the whole scenario.
+
+**Pulled by** open-crank v0.2.1. The oracle is proven there first, in open-crank's acceptance suite over the bus, and then moved here, the same way the runtime moved in v0.1.
+
+**Exit criteria**
+
+1. open-crank's acceptance verdicts are identical before and after the move.
+2. `otk-flywheel`'s scenario is graded by the oracle as well, as a second consumer that is not J1939.
+
+## v0.3: Transport faults
+
+**Goal.** Transport-level faults for every application: lost, corrupted and delayed frames, bus-off and jitter. Domain faults (an engine ECU that ignores TSC1) stay in the application.
+
+**Pulled by** open-crank v0.3.
+
+**Exit criteria**
+
+1. open-crank v0.3's fault scenarios run on them.
+2. Each fault has a mutation check that fails if the fault is not applied.
+3. `otk-flywheel` uses at least one.
+
+## v0.4: Tang Nano 20K bridge
+
+**Goal.** The signal-level transports open-crank's Level 2 needs, on an FPGA. This is open-tick's first signal-level bridge, so it also brings the hard driver, the host-to-bridge protocol and the fidelity contract.
+
+**Pulled by** open-crank v0.4.
+
+**In scope.**
+
+- Tooth-wheel and cam patterns (60−2 crank, cam over 720°) as rotary patterns. Rotary patterns stay one primitive ([VISION.md §5.2](VISION.md#52-two-kinds-of-transport)); this version implements only the tooth-wheel and cam patterns, and quadrature comes with the Raspberry Pi Pico bridge.
+- Injector pulse capture with start and width timestamps.
+- Analog outputs.
+- The hard driver: the bridge paces the core.
+- Host-to-bridge protocol, version 1, shared with every signal-level bridge that follows.
+- Fidelity contract, version 1: machines declare requirements, the bridge declares guarantees, and the runner checks them before a run.
+- Tang Nano 20K gateware; the toolchain decision (VISION.md, open question 3) is taken here.
+
+**Exit criteria**
+
+1. Host-to-bridge latency and throughput are measured and documented before anything else depends on them.
+2. open-crank's own v0.4 exit criteria are met through open-tick: a reference engine-ECU firmware achieves crank synchronisation and holds a requested speed.
+3. A jitter and latency budget is stated, then measured in the trace of every hard run.
+4. The runner refuses a run whose requirements exceed the bridge, and names the signal that fails.
+
+## v0.5: Profiles
+
+**Goal.** Machines are described by reviewable files instead of C structs.
+
+**Pulled by** open-crank v0.5 (two engines on one machine), which needs a machine described by parameters and wiring instead of a hand-built bench.
+
+**In scope.** A YAML-to-C compiler in open-tick; each application defines its own schema. Parameters, wiring, provenance and fidelity requirements only, never equations.
+
+**Exit criteria**
+
+1. open-crank's two-engine machine and its `d936la6` engine are expressed as profiles, and every scenario's trace is bit-identical to the hand-written version.
+2. A profile with a missing provenance entry fails the build.
+
+---
+
+## Track R: Renode virtual-time driver (parallel)
+
+**Pulled by** open-crank Track R.
+
+Moves here from open-crank's Track R. Step the core in lockstep with an emulated DUT, so firmware runs in the loop in CI without a board. Exit: it runs headless in CI, and its trace matches the board's within a stated tolerance.
+
+---
+
+## Relation to open-crank's roadmap
+
+Each open-crank milestone, and what it pulls from open-tick:
+
+- **v0.1.x and v0.2:** nothing; they do not wait for open-tick.
+- **v0.2.1** → open-tick v0.2 (oracle).
+- **v0.3** → open-tick v0.3 (transport faults).
+- **v0.4** → open-tick v0.4 (Tang Nano 20K bridge).
+- **v0.5** → open-tick v0.5 (profiles).
+- **Track R** → open-tick Track R (Renode virtual-time driver).
+
+## When a sibling starts
+
+These milestones keep their scope and exit criteria. They get a version number when open-robots, or another sibling application, actually starts. Until then nothing here is built.
+
+### Second consumer: open-robots in SIL
 
 **Goal.** A second, very different application runs on the same core, and what it forced to change is written down.
 
@@ -50,65 +138,23 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 1. open-crank and open-robots run on the same open-tick release.
 2. A written list of what open-robots forced to change in open-tick, and why.
 
-## v0.3: Raspberry Pi Pico bridge
+### Raspberry Pi Pico bridge
 
 **Goal.** A microcontroller reads simulated encoders through its own timers and interrupts, drives simulated motors with its own PWM, and cannot tell the difference within a stated budget.
 
 **In scope.**
 
-- Pico firmware (RP2040 or RP2350, PIO): rotary pattern output (quadrature first), pulse capture (PWM duty and direction).
-- The hard driver: the bridge paces the core.
-- Host-to-bridge protocol, version 1, shared with the Tang Nano 20K bridge later.
-- Fidelity contract, version 1: machines declare requirements, the bridge declares guarantees, and the runner checks them before a run.
+- Pico firmware (RP2040 or RP2350, PIO): quadrature output as a rotary pattern, and pulse capture (PWM duty and direction).
 - open-robots grows to four motors.
 
 **Exit criteria**
 
-1. Host-to-bridge latency and throughput are measured and documented before anything else depends on them.
-2. A DUT closes a speed loop on four simulated motors using odometry from the bridge's encoder edges.
-3. A jitter and latency budget is stated, then measured in the trace of every hard run.
-4. The runner refuses a run whose requirements exceed the bridge, and names the signal that fails.
-
-## v0.4: Tang Nano 20K bridge
-
-**Goal.** The signal-level transports open-crank's Level 2 needs, on an FPGA, behind the same host protocol as the Pico.
-
-**In scope.** Tooth-wheel patterns (60−2 crank, cam over 720°) as rotary patterns; injector pulse capture with start and width timestamps; analog outputs. Tang Nano 20K gateware; the toolchain decision (VISION.md, open question 3) is taken here.
-
-**Exit criteria**
-
-1. open-crank's own v0.4 exit criteria are met through open-tick: a reference engine-ECU firmware achieves crank synchronisation and holds a requested speed.
+1. A DUT closes a speed loop on four simulated motors using odometry from the bridge's encoder edges.
 2. Moving an application between the Pico and the Tang Nano 20K changes only configuration, not code.
 
-## v0.5: Profiles
-
-**Goal.** Machines are described by reviewable files instead of C structs.
-
-**In scope.** A YAML-to-C compiler in open-tick; each application defines its own schema. Parameters, wiring, provenance and fidelity requirements only, never equations.
-
-**Exit criteria**
-
-1. open-crank's `d936la6` machine is expressed as a profile, and every scenario's trace is bit-identical to the hand-written version.
-2. A profile with a missing provenance entry fails the build.
-
----
-
-## Track R: Renode virtual-time driver (parallel)
-
-Moves here from open-crank's Track R. Step the core in lockstep with an emulated DUT, so firmware runs in the loop in CI without a board. Exit: it runs headless in CI, and its trace matches the board's within a stated tolerance.
-
-## Track S: Register-mapped slaves (parallel, after v0.3)
+### Register-mapped slaves (after the Pico bridge)
 
 I²C and SPI devices answered by the bridge from a register map that the core updates each step. First device: an IMU for open-robots. Exit: a DUT reads the simulated IMU with its stock driver and gets values consistent with the plant.
-
----
-
-## Relation to open-crank's roadmap
-
-- open-crank v0.1.x to v0.3 (MISRA-oriented checks, reference board on the bus, acceptance suite, robustness) do not wait for open-tick. They are the closest real validation and continue in parallel.
-- open-crank's acceptance suite (its v0.2.1) is where the oracle is proven before it moves here.
-- open-crank v0.4 (Level 2) depends on open-tick v0.4.
-- open-crank's Track R moves to open-tick.
 
 ## Backlog (not scheduled)
 
