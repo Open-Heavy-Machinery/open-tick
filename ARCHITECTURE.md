@@ -13,7 +13,7 @@ v0.1 is the **extraction**: the parts of open-crank v0.1 that do not depend on a
 - a **trace writer** with columns registered by the application;
 - on Linux: a **pacer**, **free-run and paced drivers**, and a **SocketCAN bridge**.
 
-Nothing in v0.1 is signal-level (no Pico, no FPGA), and there is no fidelity contract yet: those are v0.3 and later.
+Nothing in v0.1 is signal-level (no Pico, no FPGA), and there is no fidelity contract yet: those are v0.4 (the Tang Nano 20K bridge) and later.
 
 ## 2. Zones and the dependency rule
 

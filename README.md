@@ -12,8 +12,8 @@ To a microcontroller, the world is voltages on pins, edges with timing and frame
 
 - **One clock.** Simulated time is owned by whoever runs the machine, never read from a clock. It is paced by the CPU (tests, CI), the wall clock (SIL), *(planned)* an emulator (Renode) or a bridge's oscillator (real silicon).
 - **Scenarios and faults as data.** Signal names come from the application, and a typo fails loudly with its line number.
-- **Transports.** CAN and CAN FD today; *(planned)* UART, then signal-level transports such as quadrature encoders, tooth wheels, PWM capture, GPIO and I²C/SPI slaves.
-- **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Raspberry Pi Pico and a Tang Nano 20K on the pins.
+- **Transports.** CAN and CAN FD today; *(planned)* the signal-level transports open-crank's Level 2 needs (tooth wheels, pulse capture, analog outputs); UART, quadrature encoders, GPIO and I²C/SPI slaves when a sibling application needs them.
+- **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Tang Nano 20K on the pins for open-crank's Level 2, and a Raspberry Pi Pico when open-robots starts.
 - **Traces** with columns the application registers, which refuse to shift a column silently.
 - *(planned)* **A fidelity contract.** Each machine says what it needs, each bridge says what it guarantees, and a run that cannot be faithful is refused instead of passing quietly.
 
