@@ -20,7 +20,7 @@
  * | free-run | the CPU, as fast as it can | bit for bit   | v0.1    |
  * | paced    | the host's wall clock      | no            | v0.1    |
  * | virtual  | an emulator, in lockstep   | bit for bit   | Track R |
- * | hard     | a bridge's oscillator      | no: measured  | v0.3    |
+ * | hard     | a bridge's oscillator      | no: measured  | v0.4    |
  */
 
 #ifndef OPENTICK_HOST_DRIVER_H
