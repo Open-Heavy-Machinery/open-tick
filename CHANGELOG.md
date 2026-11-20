@@ -2,6 +2,12 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
+## Unreleased
+
+### Added
+
+- [docs/trace-format.md](docs/trace-format.md): the shape of a trace file as a contract for readers: what is guaranteed (no quotes or commas in a field, one field per column in every row, an empty field is a gap) and what is not (types, units, a version).
+
 ## [0.1.0] (2026-11-19): extraction
 
 ### Added

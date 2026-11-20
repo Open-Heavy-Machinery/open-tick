@@ -14,7 +14,7 @@ To a microcontroller, the world is voltages on pins, edges with timing and frame
 - **Scenarios and faults as data.** Signal names come from the application, and a typo fails loudly with its line number.
 - **Transports.** CAN and CAN FD today; *(planned)* the signal-level transports open-crank's Level 2 needs (tooth wheels, pulse capture, analog outputs); UART, quadrature encoders, GPIO and I²C/SPI slaves when a sibling application needs them.
 - **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Tang Nano 20K on the pins for open-crank's Level 2, and a Raspberry Pi Pico when open-robots starts.
-- **Traces** with columns the application registers, which refuse to shift a column silently.
+- **Traces** with columns the application registers, which refuse to shift a column silently. The file's shape is documented in [docs/trace-format.md](docs/trace-format.md).
 - *(planned)* **A fidelity contract.** Each machine says what it needs, each bridge says what it guarantees, and a run that cannot be faithful is refused instead of passing quietly.
 
 ## The family
@@ -68,7 +68,7 @@ open-tick/
 ├── examples/    otk-flywheel
 ├── tests/       unit tests and their data
 ├── tools/       dependency and mutation checks
-└── docs/        open-crank integration plan and trial run
+└── docs/        trace format; open-crank integration plan and trial run
 ```
 
 ## Checks
