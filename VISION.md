@@ -155,7 +155,7 @@ signals:
 
 - **Scenarios stay as open-crank has them:** CSV, time-ordered, failing loudly on a typo. Signal names come from the application. Today they are a fixed enum in open-crank; in open-tick they become a table the application registers.
 - **Transport-level faults come from open-tick, for every application:** lost, corrupted or delayed frames, bus-off, jitter, a stuck pin, a missing tooth, a dead encoder channel. Domain faults (an engine ECU that ignores TSC1) stay in the application.
-- **The oracle grades the DUT only by what it can observe on its transports,** with reaction times measured from the injected event. This generalises open-crank's planned acceptance suite (its v0.2.1). It works for any DUT, in any language, on any board.
+- **The oracle grades the DUT only by what it can observe on its transports,** with reaction times measured from the injected event. This generalises open-crank's acceptance suite (its v0.2.1, released 2026-11-23). It works for any DUT, in any language, on any board.
 - **Tests must be able to fail.** Each application keeps its own mutation checks; open-tick provides the pattern.
 
 ## 6. What moves out of open-crank, and what has to change
