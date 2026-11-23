@@ -24,4 +24,8 @@ if(OTK_BUILD_TESTS)
     # The same program, paced by the wall clock: 5 s of scenario in about 5 s.
     add_test(NAME example_flywheel_paced
              COMMAND otk-flywheel ${FLYWHEEL_SCENARIO} --quiet --driver paced)
+
+    # The oracle grades the toy controller by its DUTY frames alone.
+    add_test(NAME example_flywheel_accept
+             COMMAND otk-flywheel ${FLYWHEEL_SCENARIO} --quiet --criteria ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/step.accept.csv)
 endif()

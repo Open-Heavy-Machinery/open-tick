@@ -2,11 +2,19 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## Unreleased
+## [0.2.0] (2026-11-23): oracle
 
 ### Added
 
 - [docs/trace-format.md](docs/trace-format.md): the shape of a trace file as a contract for readers: what is guaranteed (no quotes or commas in a field, one field per column in every row, an empty field is a gap) and what is not (types, units, a version).
+- **core**: `oracle.h`, the acceptance oracle, which grades a run from the frames a device under test sends, against criteria written as data. Moved from open-crank v0.2.1 (`sim/oracle/`), renamed `otk_oracle_` / `OtkOracle` / `OTK_ORACLE_`, with time in `OtkNs` in the API (`otk_oracle_parse`, `otk_oracle_load`, `otk_oracle_frame`, `otk_oracle_step`, and an observable's `stale`). The criteria file keeps its format, in milliseconds.
+- [docs/criteria-format.md](docs/criteria-format.md): the criteria format as a contract: syntax, windows, tolerance, evaluation, errors, limits and report, and what is not guaranteed (a version, the limits).
+- `otk-flywheel --criteria`: the oracle grades the toy controller by its DUTY frames, with [examples/flywheel/step.accept.csv](examples/flywheel/step.accept.csv); run as a test (`example_flywheel_accept`) and in CI. Without `--criteria` the trace is unchanged.
+- `test_oracle`: the oracle's tests from open-crank (synthetic table), plus a reaction measured from an event that does not fall on a whole millisecond.
+
+### Changed
+
+- Against the oracle in open-crank v0.2.1: with scenario events on whole milliseconds nothing changes. An event that does not fall on a whole millisecond is now measured from its exact time instead of being rounded up to the next millisecond, and a reaction time that is not a whole number of milliseconds is reported with its fraction (`reaction: 9.500000 ms after go=1`).
 
 ## [0.1.0] (2026-11-19): extraction
 

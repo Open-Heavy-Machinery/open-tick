@@ -1,0 +1,7 @@
+# Acceptance criteria for step.csv: what any speed controller on this
+# flywheel must do, judged only by its DUTY frames (0x200). Format:
+# docs/criteria-format.md.
+id,from,until,tolerance_ms,condition,text
+D1,begin,end,0,duty_pct <= 100,duty never above 100 %
+R1,1.0,fault.speed_lost=1,0,duty_pct > 0,drives while its speed feedback is fresh
+F1,fault.speed_lost=1+200ms,end,0,duty_pct == 0,no drive within 200 ms of losing the speed frames
