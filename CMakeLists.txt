@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(open-tick VERSION 0.1.0 LANGUAGES C)
+project(open-tick VERSION 0.2.0 LANGUAGES C)
 
 # open-tick builds on its own (tests, examples, CI) and as a subproject of an
 # application, through add_subdirectory() or FetchContent. As a subproject it
@@ -39,6 +39,7 @@ add_library(opentick_core STATIC
     core/src/player.c
     core/src/can.c
     core/src/trace.c
+    core/src/oracle.c
 )
 add_library(opentick::core ALIAS opentick_core)
 target_include_directories(opentick_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core/include)

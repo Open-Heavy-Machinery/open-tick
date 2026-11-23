@@ -21,7 +21,7 @@ Nothing in v0.1 is signal-level (no Pico, no FPGA), and there is no fidelity con
 flowchart LR
     A["applications<br/>(open-crank, open-robots)"]
     H["host/<br/>pacer, drivers, SocketCAN"]
-    C["core/<br/>timebase, signals, scenario,<br/>player, CAN, trace"]
+    C["core/<br/>timebase, signals, scenario,<br/>player, CAN, trace, oracle"]
     A --> H
     A --> C
     H --> C
@@ -29,7 +29,7 @@ flowchart LR
 
 | Zone | Contains | May depend on | Must not contain |
 |---|---|---|---|
-| `core/` | timebase, signals, scenario, player, CAN frames and queue, trace | the ISO C11 standard library | OS headers or feature macros (`_POSIX_C_SOURCE`, ...), clocks, sockets, anything from `host/` |
+| `core/` | timebase, signals, scenario, player, CAN frames and queue, trace, oracle | the ISO C11 standard library | OS headers or feature macros (`_POSIX_C_SOURCE`, ...), clocks, sockets, anything from `host/` |
 | `host/` | pacer, drivers, SocketCAN bridge | `core/`, the operating system | physics, the meaning of any message |
 
 **The rule: dependencies point one way, and open-tick never includes an application.**
@@ -130,6 +130,22 @@ This is a non-blocking raw socket for classic CAN and CAN FD. Its behaviour:
 - **CAN FD is used only if the interface's MTU allows it.** Sending an FD frame on a classic interface fails with `EMSGSIZE` instead of being truncated.
 
 **Why deliver 11-bit frames.** open-crank's glue dropped them because J1939 uses 29-bit identifiers only. That filter belongs to J1939, so it moved to open-crank's conversion function (`oc_frame_from_otk`). CANopen, for example, needs 11-bit frames.
+
+### 3.9 Oracle (`oracle.h`)
+
+The acceptance oracle grades a run from the frames a device under test (DUT) sends, against criteria written as data. It moved here in v0.2.0 from open-crank v0.2.1 (`sim/oracle/`), where it was proven on seven scenarios over `vcan` and on a board. The criteria format is a contract: [docs/criteria-format.md](docs/criteria-format.md).
+
+**Why it is generic.** The oracle knows no protocol. The application gives it a table of observables (name, stale time, default) and a function that decodes a frame into new values for them. open-crank decodes J1939 and keeps only the DUT's frames in its own decoder; `otk-flywheel` decodes one 11-bit frame. Nothing from J1939 or any application enters `core/`: `tools/check_deps.sh` rejects any application header.
+
+**Why criteria are data.** A criteria file is text next to its scenario, not code. The same file grades a run in memory, on `vcan` and with a board on the bus, and a criterion can be read and reviewed by someone who does not read C.
+
+**Why the API is in `OtkNs` and the file in milliseconds.** The API takes time as `OtkNs`, like the rest of `core/`, so an application hands it the same timestamps it uses everywhere else, and an event that does not fall on a whole millisecond is measured from its exact time. The file stays in milliseconds because people write it, a millisecond is fine enough for a bus, and keeping the unit means no existing criteria file changes.
+
+**Why memory is fixed.** There is no `malloc`: criteria, terms and grading state live in fixed arrays inside `OtkOracle`, with the limits in `oracle.h`. An `OtkOracle` is large (tens of KiB), so applications keep it off the stack, as `otk-flywheel` does with a static.
+
+**Why the step at `end` is graded.** A window that ends at `end` is covered only if the step at `end` is evaluated. `otk-flywheel` learned this when its criteria were added: its loop stops before the last step, and without one more evaluation at `end`, with the frames the DUT sent in the last step, no window up to `end` was covered. open-crank's runners already evaluated that step.
+
+**What it does not do.** It sees only frames, never the DUT's internal state. It grades the reaction, not its reason: a controller that stops driving because it lost its speed feedback and one that stops for any other reason look the same on the bus.
 
 ## 4. Consuming open-tick
 

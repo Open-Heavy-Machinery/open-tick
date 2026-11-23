@@ -4,6 +4,7 @@
  * @brief otk-flywheel: the smallest machine that uses all of open-tick v0.1.
  *
  *     otk-flywheel examples/flywheel/step.csv [--driver free-run|paced] [--trace out.csv] [--quiet]
+ *                  [--criteria examples/flywheel/step.accept.csv]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
  * test") holds the speed the operator asks for. They talk CAN through
@@ -24,6 +25,7 @@
 
 #include <opentick/can.h>
 #include <opentick/host/driver.h>
+#include <opentick/oracle.h>
 #include <opentick/player.h>
 #include <opentick/scenario.h>
 #include <opentick/trace.h>
@@ -204,22 +206,46 @@ static void trace_row(OtkTrace *t, const Machine *m, const Dut *d) {
     (void)otk_trace_end_row(t);
 }
 
+/* ---- Oracle: what the DUT sends, as the machine would see it ------------- */
+
+enum { OBS_DUTY_PCT, OBS_COUNT };
+static const OtkOracleObservable OBSERVABLES[OBS_COUNT] = {
+    /* The machine treats a duty command older than 100 ms as zero: so does the oracle. */
+    [OBS_DUTY_PCT] = { "duty_pct", 100U * OTK_NS_PER_MS, { false, 0.0 } },
+};
+
+static size_t decode(void *ctx, const OtkCanFrame *f, OtkOracleUpdate *out, size_t cap) {
+    (void)ctx;
+    if (cap < 1U || f->id != ID_DUTY || f->len < 1U || (f->flags & OTK_CAN_EXTENDED) != 0U) {
+        return 0U;
+    }
+    out[0] = (OtkOracleUpdate){ OBS_DUTY_PCT, { false, (double)f->data[0] * 0.5 } };
+    return 1U;
+}
+
+static const OtkOracleTable ORACLE_TABLE = { OBSERVABLES, OBS_COUNT, decode, NULL };
+
 /* ---- Main: the in-memory bridge and a driver ------------------------------ */
 
 static OtkScenario g_scenario;
+static OtkOracle g_oracle; /* large: keep it off the stack */
 
 static void usage(void) {
-    fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n");
+    fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n"
+                    "                   [--criteria <criteria.csv>]\n");
 }
 
 int main(int argc, char **argv) {
     const char *scenario_path = NULL;
     const char *trace_path = NULL;
+    const char *criteria_path = NULL;
     OtkDriverKind kind = OTK_DRIVER_FREE_RUN;
     int quiet = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--trace") == 0 && i + 1 < argc) {
             trace_path = argv[++i];
+        } else if (strcmp(argv[i], "--criteria") == 0 && i + 1 < argc) {
+            criteria_path = argv[++i];
         } else if (strcmp(argv[i], "--driver") == 0 && i + 1 < argc) {
             if (!otk_driver_from_name(argv[++i], &kind)) {
                 usage();
@@ -247,6 +273,12 @@ int main(int argc, char **argv) {
     if (!g_scenario.has_end) {
         fprintf(stderr, "otk-flywheel: %s has no `end` event\n", scenario_path);
         return 1;
+    }
+
+    if (criteria_path != NULL && !otk_oracle_load(&g_oracle, criteria_path, &ORACLE_TABLE, &g_scenario, &SIGNALS,
+                                                  otk_ns_from_ms(STEP_MS), err, sizeof(err))) {
+        fprintf(stderr, "otk-flywheel: %s: %s\n", criteria_path, err);
+        return 2;
     }
 
     FILE *trace_fp = NULL;
@@ -284,8 +316,14 @@ int main(int argc, char **argv) {
         otk_player_advance(&player, otk_ns_from_ms(m.t_ms));
         for (size_t i = 0; i < otk_can_queue_count(&to_machine); i++) {
             machine_rx(&m, otk_can_queue_at(&to_machine, i));
+            if (criteria_path != NULL) {
+                otk_oracle_frame(&g_oracle, otk_can_queue_at(&to_machine, i), otk_ns_from_ms(m.t_ms));
+            }
         }
         otk_can_queue_clear(&to_machine);
+        if (criteria_path != NULL) {
+            otk_oracle_step(&g_oracle, otk_ns_from_ms(m.t_ms));
+        }
 
         machine_step(&m, &to_dut);
 
@@ -323,5 +361,22 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
-    return (to_dut.overflows == 0U && to_machine.overflows == 0U) ? 0 : 1;
+    if (to_dut.overflows != 0U || to_machine.overflows != 0U) {
+        return 1;
+    }
+    if (criteria_path != NULL) {
+        /* The step at `end` is graded too, with the frames the DUT sent in the last step. */
+        for (size_t i = 0; i < otk_can_queue_count(&to_machine); i++) {
+            otk_oracle_frame(&g_oracle, otk_can_queue_at(&to_machine, i), otk_ns_from_ms(m.t_ms));
+        }
+        otk_oracle_step(&g_oracle, otk_ns_from_ms(m.t_ms));
+        const bool pass = otk_oracle_report(&g_oracle, stdout);
+        const size_t total = otk_oracle_count(&g_oracle);
+        if (!pass) {
+            printf("otk-flywheel: FAIL (%zu of %zu criteria failed)\n", otk_oracle_failures(&g_oracle), total);
+            return 1;
+        }
+        printf("otk-flywheel: PASS (%zu of %zu criteria)\n", total, total);
+    }
+    return 0;
 }
