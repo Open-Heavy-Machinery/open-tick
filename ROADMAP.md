@@ -11,7 +11,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.0** (done) | Vision and decisions | — |
 | **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank v0.1 |
 | **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
-| **v0.2.1** | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
+| **v0.2.1** (done) | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
 | **v0.3** | Transport faults | open-crank v0.3 |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
@@ -65,10 +65,12 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 **In scope.** `otk_oracle_write_verdicts()`, written from the same state as the text report; the format as a contract ([docs/verdict-format.md](docs/verdict-format.md)); `otk-flywheel --verdicts`; open-rig draws the file over the trace (in open-rig's own repository).
 
+**Status: done** (2026-11-25, tagged `v0.2.1`).
+
 **Exit criteria**
 
-1. The verdict file of every test case and of `otk-flywheel` agrees with the text report.
-2. open-rig draws the flywheel's verdicts over its trace.
+- [x] 1. The verdict file of every test case and of `otk-flywheel` agrees with the text report. *[#10](https://github.com/Open-Heavy-Machinery/open-tick/pull/10): `test_oracle` checks every status and reaction state row by row against the report; `example_flywheel_verdicts` compares `otk-flywheel`'s file with [examples/flywheel/step.verdicts.csv](examples/flywheel/step.verdicts.csv) byte for byte, in ctest and CI.*
+- [x] 2. open-rig draws the flywheel's verdicts over its trace. *[open-rig#2](https://github.com/Open-Heavy-Machinery/open-rig/pull/2) (open-rig v0.2): windows, events, reaction ends and first violations, with open-tick's file byte for byte; its CI loads a failing example and checks it.*
 
 ## v0.3: Transport faults
 
