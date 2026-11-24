@@ -11,6 +11,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.0** (done) | Vision and decisions | — |
 | **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank v0.1 |
 | **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
+| **v0.2.1** | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
 | **v0.3** | Transport faults | open-crank v0.3 |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
@@ -55,6 +56,19 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 - [x] 1. open-crank's acceptance verdicts are identical before and after the move. *The seven reports of `open-crank-accept-loop` and the output of its `tools/accept_mutants.sh`, byte for byte; on `vcan` in CI, the same seven PASS and the same reaction times.*
 - [x] 2. `otk-flywheel`'s scenario is graded by the oracle as well, as a second consumer that is not J1939. *[examples/flywheel/step.accept.csv](examples/flywheel/step.accept.csv): three criteria (D1, R1, F1), 3 of 3 PASS, run in `ctest` and CI.*
+
+## v0.2.1: Verdict files
+
+**Goal.** The oracle's verdicts in a file that a program can read and a viewer can draw over the trace. The file holds, for each criterion, where its window started and ended, where the reaction ended, and where the criterion first failed.
+
+**Pulled by** open-crank v0.3. Its fault scenarios will make criteria fail on purpose, and debugging them means seeing where on the trace each window, reaction and violation is. Today that is only in the text report, in words.
+
+**In scope.** `otk_oracle_write_verdicts()`, written from the same state as the text report; the format as a contract ([docs/verdict-format.md](docs/verdict-format.md)); `otk-flywheel --verdicts`; open-rig draws the file over the trace (in open-rig's own repository).
+
+**Exit criteria**
+
+1. The verdict file of every test case and of `otk-flywheel` agrees with the text report.
+2. open-rig draws the flywheel's verdicts over its trace.
 
 ## v0.3: Transport faults
 

@@ -28,4 +28,14 @@ if(OTK_BUILD_TESTS)
     # The oracle grades the toy controller by its DUTY frames alone.
     add_test(NAME example_flywheel_accept
              COMMAND otk-flywheel ${FLYWHEEL_SCENARIO} --quiet --criteria ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/step.accept.csv)
+
+    # The verdict file (docs/verdict-format.md) is the one kept in the repository, byte for byte.
+    add_test(NAME example_flywheel_verdicts_write
+             COMMAND otk-flywheel ${FLYWHEEL_SCENARIO} --quiet --criteria ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/step.accept.csv
+                     --verdicts ${FLYWHEEL_OUT}/step.verdicts.csv)
+    set_tests_properties(example_flywheel_verdicts_write PROPERTIES FIXTURES_SETUP flywheel_verdicts)
+    add_test(NAME example_flywheel_verdicts
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/step.verdicts.csv
+                     ${FLYWHEEL_OUT}/step.verdicts.csv)
+    set_tests_properties(example_flywheel_verdicts PROPERTIES FIXTURES_REQUIRED flywheel_verdicts)
 endif()

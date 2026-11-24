@@ -73,6 +73,7 @@ PLAYER=core/src/player.c
 CAN=core/src/can.c
 TRACE=core/src/trace.c
 PACER=host/src/pacer.c
+ORACLE=core/src/oracle.c
 
 mutate "signals: duplicate names accepted" $SIG \
     "if (strcmp(name, t->names[j]) == 0) {" "if (false) {"
@@ -117,6 +118,8 @@ mutate "pacer: overruns not counted" $PACER \
     "p->overruns++;" ";"
 mutate "pacer: deadline not advanced (runs unpaced)" $PACER \
     "p->next.tv_nsec += (long)(p->period % OTK_NS_PER_S);" ";"
+mutate "verdicts: reaction written from the window start, not the event" $ORACLE \
+    "ok = ok && print_ms(reaction_ns(c), fp) >= 0;" "ok = ok && print_ms(c->true_since_ns - c->from_ns, fp) >= 0;"
 
 echo
 echo "$killed mutations killed, $problems problems"

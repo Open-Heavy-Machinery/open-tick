@@ -2,6 +2,20 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
+## Unreleased
+
+### Added
+
+- **Verdict files** (v0.2.1): `otk_oracle_write_verdicts()` writes one CSV row per criterion, with its verdict, status (`ok`, `violated`, `not_evaluated`, `not_covered`), window, event, reaction and first violation, in seconds on the trace's time axis. It reads the same state as `otk_oracle_report()`, through the same functions.
+- [docs/verdict-format.md](docs/verdict-format.md): the verdict format as a contract.
+- `otk-flywheel --verdicts <file>` (with `--criteria`). It writes [examples/flywheel/step.verdicts.csv](examples/flywheel/step.verdicts.csv), checked byte for byte by the test `example_flywheel_verdicts` and in CI. Without `--verdicts`, the output and the trace are unchanged.
+- `test_oracle`: the verdict file is checked row by row against the text report, for every status and every reaction state, and for a write error.
+- `tools/mutation_check.sh`: "verdicts: reaction written from the window start, not the event" (19 mutations).
+
+### Changed
+
+- `otk_oracle_report()` now reads the outcome and the reaction through the same functions as the verdict writer. Its output is unchanged: every existing report test passes, and `otk-flywheel`'s report is identical byte for byte.
+
 ## [0.2.0] (2026-11-23): oracle
 
 ### Added

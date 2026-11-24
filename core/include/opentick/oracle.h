@@ -171,6 +171,15 @@ void otk_oracle_step(OtkOracle *o, OtkNs t);
  */
 bool otk_oracle_report(const OtkOracle *o, FILE *fp);
 
+/**
+ * @brief Writes the verdict file: one CSV row per criterion, with its verdict, window, reaction and first
+ *        violation, read from the same state as otk_oracle_report(). Format: docs/verdict-format.md.
+ *
+ * Call it after the last otk_oracle_step() of the run.
+ * @return false if a write failed
+ */
+bool otk_oracle_write_verdicts(const OtkOracle *o, FILE *fp);
+
 /** @brief Number of criteria loaded. */
 size_t otk_oracle_count(const OtkOracle *o);
 

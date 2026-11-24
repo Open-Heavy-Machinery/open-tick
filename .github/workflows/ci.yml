@@ -58,6 +58,8 @@ jobs:
           ./build/otk-flywheel examples/flywheel/step.csv
           ./build/otk-flywheel examples/flywheel/step.csv --trace flywheel.csv
           ./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv
+          ./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv --verdicts step.verdicts.csv
+          cmp step.verdicts.csv examples/flywheel/step.verdicts.csv
 
   sanitizers:
     name: sanitizers (ASan, UBSan, float-cast-overflow)

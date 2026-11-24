@@ -145,6 +145,8 @@ The acceptance oracle grades a run from the frames a device under test (DUT) sen
 
 **Why the step at `end` is graded.** A window that ends at `end` is covered only if the step at `end` is evaluated. `otk-flywheel` learned this when its criteria were added: its loop stops before the last step, and without one more evaluation at `end`, with the frames the DUT sent in the last step, no window up to `end` was covered. open-crank's runners already evaluated that step.
 
+**Why verdicts are a file of their own** (v0.2.1). `otk_oracle_write_verdicts()` writes one CSV row per criterion: verdict, status, window, event, reaction and first violation, in seconds on the trace's time axis ([docs/verdict-format.md](docs/verdict-format.md)). A viewer can then draw where each window started, where the reaction ended and where a criterion failed, which the text report only says in words. It is a separate file because the trace stays as it is: a trace has no rows for criteria, and adding columns to it would change every existing trace. The writer and `otk_oracle_report()` read the same state through the same functions (`status_of`, `reaction_of`, `reaction_ns`, `print_ms`), so the file and the report cannot disagree. `test_oracle` checks them row by row.
+
 **What it does not do.** It sees only frames, never the DUT's internal state. It grades the reaction, not its reason: a controller that stops driving because it lost its speed feedback and one that stops for any other reason look the same on the bus.
 
 ## 4. Consuming open-tick

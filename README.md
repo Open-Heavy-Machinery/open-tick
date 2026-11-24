@@ -14,7 +14,7 @@ To a microcontroller, the world is voltages on pins, edges with timing and frame
 - **Scenarios and faults as data.** Signal names come from the application, and a typo fails loudly with its line number.
 - **Transports.** CAN and CAN FD today; *(planned)* the signal-level transports open-crank's Level 2 needs (tooth wheels, pulse capture, analog outputs); UART, quadrature encoders, GPIO and I²C/SPI slaves when a sibling application needs them.
 - **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Tang Nano 20K on the pins for open-crank's Level 2, and a Raspberry Pi Pico when open-robots starts.
-- **An oracle** that grades a device under test only by the frames it sends, against criteria written as data, with reaction times measured from the injected event. The application says what its frames mean; the criteria format is documented in [docs/criteria-format.md](docs/criteria-format.md).
+- **An oracle** that grades a device under test only by the frames it sends, against criteria written as data, with reaction times measured from the injected event. The application says what its frames mean; the criteria format is documented in [docs/criteria-format.md](docs/criteria-format.md). Its verdicts can also be written as a file for programs and viewers ([docs/verdict-format.md](docs/verdict-format.md)).
 - **Traces** with columns the application registers, which refuse to shift a column silently. The file's shape is documented in [docs/trace-format.md](docs/trace-format.md).
 - *(planned)* **A fidelity contract.** Each machine says what it needs, each bridge says what it guarantees, and a run that cannot be faithful is refused instead of passing quietly.
 

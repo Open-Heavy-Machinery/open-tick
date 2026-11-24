@@ -4,7 +4,7 @@
  * @brief otk-flywheel: the smallest machine that uses all of open-tick v0.1.
  *
  *     otk-flywheel examples/flywheel/step.csv [--driver free-run|paced] [--trace out.csv] [--quiet]
- *                  [--criteria examples/flywheel/step.accept.csv]
+ *                  [--criteria examples/flywheel/step.accept.csv [--verdicts out.verdicts.csv]]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
  * test") holds the speed the operator asks for. They talk CAN through
@@ -232,13 +232,14 @@ static OtkOracle g_oracle; /* large: keep it off the stack */
 
 static void usage(void) {
     fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n"
-                    "                   [--criteria <criteria.csv>]\n");
+                    "                   [--criteria <criteria.csv> [--verdicts <out.csv>]]\n");
 }
 
 int main(int argc, char **argv) {
     const char *scenario_path = NULL;
     const char *trace_path = NULL;
     const char *criteria_path = NULL;
+    const char *verdicts_path = NULL;
     OtkDriverKind kind = OTK_DRIVER_FREE_RUN;
     int quiet = 0;
     for (int i = 1; i < argc; i++) {
@@ -246,6 +247,8 @@ int main(int argc, char **argv) {
             trace_path = argv[++i];
         } else if (strcmp(argv[i], "--criteria") == 0 && i + 1 < argc) {
             criteria_path = argv[++i];
+        } else if (strcmp(argv[i], "--verdicts") == 0 && i + 1 < argc) {
+            verdicts_path = argv[++i];
         } else if (strcmp(argv[i], "--driver") == 0 && i + 1 < argc) {
             if (!otk_driver_from_name(argv[++i], &kind)) {
                 usage();
@@ -260,8 +263,8 @@ int main(int argc, char **argv) {
             return 2;
         }
     }
-    if (scenario_path == NULL) {
-        usage();
+    if (scenario_path == NULL || (verdicts_path != NULL && criteria_path == NULL)) {
+        usage(); /* the verdict file is the oracle's: it needs --criteria */
         return 2;
     }
 
@@ -372,6 +375,14 @@ int main(int argc, char **argv) {
         otk_oracle_step(&g_oracle, otk_ns_from_ms(m.t_ms));
         const bool pass = otk_oracle_report(&g_oracle, stdout);
         const size_t total = otk_oracle_count(&g_oracle);
+        if (verdicts_path != NULL) {
+            FILE *vf = fopen(verdicts_path, "w");
+            const bool written = vf != NULL && otk_oracle_write_verdicts(&g_oracle, vf);
+            if (vf == NULL || fclose(vf) != 0 || !written) {
+                fprintf(stderr, "otk-flywheel: cannot write %s\n", verdicts_path);
+                return 1;
+            }
+        }
         if (!pass) {
             printf("otk-flywheel: FAIL (%zu of %zu criteria failed)\n", otk_oracle_failures(&g_oracle), total);
             return 1;

@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /**
  * @file oracle.c
- * @brief Acceptance oracle. See oracle.h and docs/criteria-format.md.
+ * @brief Acceptance oracle. See oracle.h, docs/criteria-format.md and
+ *        docs/verdict-format.md.
  *
  * Only the C standard library and open-tick's core types: this file must not
  * know about any application or protocol.
@@ -16,6 +17,7 @@
 #include <string.h>
 
 #define HEADER "id,from,until,tolerance_ms,condition,text"
+#define VERDICT_HEADER "id,verdict,status,from_s,until_s,event,event_s,reaction,reaction_ms,fail_s,text"
 #define MAX_TOLERANCE_MS 3600000UL
 #define MAX_OFFSET_MS 4000000000LL
 #define NS_PER_MS ((int64_t)OTK_NS_PER_MS)
@@ -611,8 +613,42 @@ static bool covered(const OtkOracle *o, const OtkOracleCriterion *c) {
     return c->evaluated && c->last_ns + (int64_t)o->step > c->until_ns;
 }
 
+/* How a criterion ended. The text report and the verdict file both read it from here. */
+typedef enum { STATUS_OK, STATUS_VIOLATED, STATUS_NOT_EVALUATED, STATUS_NOT_COVERED } Status;
+
+static Status status_of(const OtkOracle *o, const OtkOracleCriterion *c) {
+    if (c->failed) {
+        return STATUS_VIOLATED;
+    }
+    if (!c->evaluated) {
+        return STATUS_NOT_EVALUATED;
+    }
+    if (!covered(o, c)) {
+        return STATUS_NOT_COVERED;
+    }
+    return STATUS_OK;
+}
+
 static bool passed(const OtkOracle *o, const OtkOracleCriterion *c) {
-    return covered(o, c) && !c->failed;
+    return status_of(o, c) == STATUS_OK;
+}
+
+/* The reaction of a criterion whose `from` is an event plus an offset. */
+typedef enum { REACTION_NONE, REACTION_MEASURED, REACTION_NOT_MEASURED, REACTION_NOT_HOLDING } Reaction;
+
+static Reaction reaction_of(const OtkOracleCriterion *c) {
+    if (!c->from_event) {
+        return REACTION_NONE;
+    }
+    if (!c->reaction_done) {
+        return REACTION_NOT_MEASURED;
+    }
+    return c->reaction_holding ? REACTION_MEASURED : REACTION_NOT_HOLDING;
+}
+
+/* Valid when reaction_of() is REACTION_MEASURED: from the event to the start of the run that held at `from`. */
+static int64_t reaction_ns(const OtkOracleCriterion *c) {
+    return c->true_since_ns - c->event_ns;
 }
 
 static void print_values(const OtkOracle *o, const OtkOracleCriterion *c, FILE *fp) {
@@ -634,44 +670,83 @@ static void print_values(const OtkOracle *o, const OtkOracleCriterion *c, FILE *
 }
 
 /* Whole milliseconds when exact; a reaction that is not a whole number of ms keeps its fraction. */
-static void print_reaction(int64_t ns, const char *event, FILE *fp) {
+static int print_ms(int64_t ns, FILE *fp) {
     if (ns % NS_PER_MS == 0) {
-        fprintf(fp, "  reaction: %lld ms after %s", (long long)(ns / NS_PER_MS), event);
-    } else {
-        fprintf(fp, "  reaction: %.6f ms after %s", (double)ns / 1e6, event);
+        return fprintf(fp, "%lld", (long long)(ns / NS_PER_MS));
     }
+    return fprintf(fp, "%.6f", (double)ns / 1e6);
 }
 
 bool otk_oracle_report(const OtkOracle *o, FILE *fp) {
     bool all = true;
     for (size_t i = 0; i < o->n; i++) {
         const OtkOracleCriterion *c = &o->criteria[i];
-        const bool ok = passed(o, c);
+        const Status st = status_of(o, c);
+        const bool ok = (st == STATUS_OK);
         all = all && ok;
         fprintf(fp, "%s  %s  %s  [%.2f s .. %.2f s]", ok ? "PASS" : "FAIL", c->id, c->text,
                 (double)c->from_ns / 1e9, (double)c->until_ns / 1e9);
-        if (c->from_event) {
-            if (!c->reaction_done) {
-                fprintf(fp, "  reaction: not measured");
-            } else if (c->reaction_holding) {
-                print_reaction(c->true_since_ns - c->event_ns, c->event, fp);
-            } else {
-                fprintf(fp, "  reaction: not holding at %.2f s", (double)c->from_ns / 1e9);
-            }
+        switch (reaction_of(c)) {
+        case REACTION_MEASURED:
+            fputs("  reaction: ", fp);
+            (void)print_ms(reaction_ns(c), fp);
+            fprintf(fp, " ms after %s", c->event);
+            break;
+        case REACTION_NOT_MEASURED:
+            fputs("  reaction: not measured", fp);
+            break;
+        case REACTION_NOT_HOLDING:
+            fprintf(fp, "  reaction: not holding at %.2f s", (double)c->from_ns / 1e9);
+            break;
+        case REACTION_NONE:
+        default:
+            break;
         }
-        if (c->failed) {
+        switch (st) {
+        case STATUS_VIOLATED:
             fprintf(fp, "  first violation at %.2f s:", (double)c->fail_ns / 1e9);
             print_values(o, c, fp);
-        } else if (!c->evaluated) {
-            fprintf(fp, "  not evaluated: no step fell inside the window");
-        } else if (!covered(o, c)) {
+            break;
+        case STATUS_NOT_EVALUATED:
+            fputs("  not evaluated: no step fell inside the window", fp);
+            break;
+        case STATUS_NOT_COVERED:
             fprintf(fp, "  not evaluated to the end: the last step was at %.2f s", (double)c->last_ns / 1e9);
-        } else {
-            /* passed */
+            break;
+        case STATUS_OK:
+        default:
+            break;
         }
         fputc('\n', fp);
     }
     return all;
+}
+
+bool otk_oracle_write_verdicts(const OtkOracle *o, FILE *fp) {
+    static const char *const STATUS_NAME[] = { "ok", "violated", "not_evaluated", "not_covered" };
+    static const char *const REACTION_NAME[] = { "", "measured", "not_measured", "not_holding" };
+    bool ok = fputs(VERDICT_HEADER "\n", fp) >= 0;
+    for (size_t i = 0; i < o->n; i++) {
+        const OtkOracleCriterion *c = &o->criteria[i];
+        const Status st = status_of(o, c);
+        const Reaction re = reaction_of(c);
+        ok = ok && fprintf(fp, "%s,%s,%s,%.6f,%.6f,", c->id, st == STATUS_OK ? "PASS" : "FAIL", STATUS_NAME[st],
+                           (double)c->from_ns / 1e9, (double)c->until_ns / 1e9) >= 0;
+        if (re == REACTION_NONE) {
+            ok = ok && fputs(",,,,", fp) >= 0;
+        } else {
+            ok = ok && fprintf(fp, "%s,%.6f,%s,", c->event, (double)c->event_ns / 1e9, REACTION_NAME[re]) >= 0;
+            if (re == REACTION_MEASURED) {
+                ok = ok && print_ms(reaction_ns(c), fp) >= 0;
+            }
+            ok = ok && fputc(',', fp) != EOF;
+        }
+        if (st == STATUS_VIOLATED) {
+            ok = ok && fprintf(fp, "%.6f", (double)c->fail_ns / 1e9) >= 0;
+        }
+        ok = ok && fprintf(fp, ",%s\n", c->text) >= 0;
+    }
+    return ok && ferror(fp) == 0;
 }
 
 size_t otk_oracle_count(const OtkOracle *o) {
