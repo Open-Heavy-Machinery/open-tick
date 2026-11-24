@@ -1,0 +1,4 @@
+id,verdict,status,from_s,until_s,event,event_s,reaction,reaction_ms,fail_s,text
+D1,PASS,ok,0.000000,5.000000,,,,,,duty never above 100 %
+R1,PASS,ok,1.000000,4.000000,,,,,,drives while its speed feedback is fresh
+F1,PASS,ok,4.200000,5.000000,fault.speed_lost=1,4.000000,measured,110,,no drive within 200 ms of losing the speed frames

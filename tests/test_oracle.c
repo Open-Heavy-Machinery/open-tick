@@ -2,8 +2,9 @@
 /**
  * @file test_oracle.c
  * @brief Acceptance oracle: criteria format, windows, tolerance, staleness,
- *        implication and the reaction time it reports. A synthetic table of
- *        observables and hand-made frames; no bus.
+ *        implication, the reaction time it reports, and the verdict file
+ *        (docs/verdict-format.md), row by row against the text report. A
+ *        synthetic table of observables and hand-made frames; no bus.
  */
 
 #include <string.h>
@@ -439,6 +440,122 @@ static void test_reaction_fraction(void) {
     check_report_has("reaction: 9.500000 ms after go=1");
 }
 
+/* ------------------------------------------------------------ verdict file */
+
+/* The verdict file as text. */
+static const char *verdicts(void) {
+    static char buf[4096];
+    memset(buf, 0, sizeof(buf));
+    FILE *fp = tmpfile();
+    if (fp == NULL) {
+        return "";
+    }
+    CHECK(otk_oracle_write_verdicts(&oracle, fp));
+    rewind(fp);
+    const size_t n = fread(buf, 1U, sizeof(buf) - 1U, fp);
+    buf[n] = '\0';
+    fclose(fp);
+    return buf;
+}
+
+#define VH "id,verdict,status,from_s,until_s,event,event_s,reaction,reaction_ms,fail_s,text\n"
+
+/* The whole verdict file, and the report line it must agree with. */
+static void check_verdicts(const char *want, const char *report_fragment) {
+    const char *v = verdicts();
+    CHECK(strcmp(v, want) == 0);
+    if (strcmp(v, want) != 0) {
+        fprintf(stderr, "  verdicts:\n%s  wanted:\n%s", v, want);
+    }
+    check_report_has(report_fragment);
+}
+
+static int a_until_150(uint32_t t) {
+    return (t <= 150U) ? 1 : -1;
+}
+
+static void test_verdict_file(void) {
+    /* ok, no event; commas in the text are kept (text is the last column). */
+    CHECK(load(H "X,begin,end,0,a == 1,text, with commas, kept\n"));
+    run(a_one);
+    check_verdicts(VH "X,PASS,ok,0.000000,1.000000,,,,,,text, with commas, kept\n",
+                   "PASS  X  text, with commas, kept  [0.00 s .. 1.00 s]\n");
+
+    /* violated: fail_s is the start of the false run. */
+    CHECK(load(H "W,go=1,stop=1,0,a == 1,go to stop\n"));
+    run(a_zero_at_300);
+    check_verdicts(VH "W,FAIL,violated,0.100000,0.300000,,,,,0.300000,go to stop\n",
+                   "FAIL  W  go to stop  [0.10 s .. 0.30 s]  first violation at 0.30 s");
+
+    /* not_evaluated: no step falls between 105 ms and 108 ms. */
+    CHECK(load(H "N,0.105,0.108,0,a == 1,between steps\n"));
+    run(a_one);
+    check_verdicts(VH "N,FAIL,not_evaluated,0.105000,0.108000,,,,,,between steps\n",
+                   "FAIL  N  between steps  [0.10 s .. 0.11 s]  not evaluated: no step fell inside the window");
+
+    /* not_covered: the run stops at 0.5 s. */
+    CHECK(load(H "C,begin,end,0,a == 1,whole run\n"));
+    for (uint32_t t = 0U; t <= 500U; t += STEP_MS) {
+        send(1U, 1U, t);
+        otk_oracle_step(&oracle, otk_ns_from_ms(t));
+    }
+    check_verdicts(VH "C,FAIL,not_covered,0.000000,1.000000,,,,,,whole run\n",
+                   "FAIL  C  whole run  [0.00 s .. 1.00 s]  not evaluated to the end: the last step was at 0.50 s");
+
+    /* measured: 30 ms after go=1 at 0.1 s. */
+    const char *r = H "R,go=1+100ms,end,0,a == 1,a within 100 ms of go\n";
+    CHECK(load(r));
+    run(a_from_130);
+    check_verdicts(VH "R,PASS,ok,0.200000,1.000000,go=1,0.100000,measured,30,,a within 100 ms of go\n",
+                   "PASS  R  a within 100 ms of go  [0.20 s .. 1.00 s]  reaction: 30 ms after go=1\n");
+
+    /* not_holding: lost at `from`; the criterion is violated there. */
+    CHECK(load(r));
+    run(a_lost_at_200);
+    check_verdicts(VH "R,FAIL,violated,0.200000,1.000000,go=1,0.100000,not_holding,,0.200000,a within 100 ms of go\n",
+                   "reaction: not holding at 0.20 s  first violation at 0.20 s: a = 0");
+
+    /* not_measured: the run never reached `from`, so the window was not evaluated either. */
+    CHECK(load(r));
+    for (uint32_t t = 0U; t <= 150U; t += STEP_MS) {
+        send(1U, (uint8_t)a_until_150(t), t);
+        otk_oracle_step(&oracle, otk_ns_from_ms(t));
+    }
+    check_verdicts(VH "R,FAIL,not_evaluated,0.200000,1.000000,go=1,0.100000,not_measured,,,a within 100 ms of go\n",
+                   "reaction: not measured  not evaluated: no step fell inside the window");
+
+    /* Rows follow the criteria file's order. */
+    CHECK(load(H "B,begin,end,0,a == 1,second in time\nA,begin,0.5,0,a == 1,first in time\n"));
+    run(a_one);
+    check_verdicts(VH "B,PASS,ok,0.000000,1.000000,,,,,,second in time\n"
+                      "A,PASS,ok,0.000000,0.500000,,,,,,first in time\n",
+                   "PASS  A  first in time");
+}
+
+static void test_verdict_reaction_fraction(void) {
+    static const char *const names[] = { "go" };
+    static const OtkSignalTable signals = { names, 1U };
+    char err[200] = "";
+    CHECK(otk_scenario_parse("time_s,signal,value\n0.1005,go,1\n1.0,end,0\n", &signals, &scn_fraction, err,
+                             sizeof(err)));
+    CHECK(otk_oracle_parse(&oracle, H "R,go=1+50ms,end,0,a == 1,t\n", &TABLE, &scn_fraction, &signals,
+                           otk_ns_from_ms(STEP_MS), err, sizeof(err)));
+    run(a_from_110);
+    check_verdicts(VH "R,PASS,ok,0.150500,1.000000,go=1,0.100500,measured,9.500000,,t\n",
+                   "reaction: 9.500000 ms after go=1");
+}
+
+static void test_verdict_write_error(void) {
+    CHECK(load(H "X,begin,end,0,a == 1,t\n"));
+    run(a_one);
+    FILE *fp = fopen("/dev/null", "r"); /* a stream that refuses writes */
+    CHECK(fp != NULL);
+    if (fp != NULL) {
+        CHECK(!otk_oracle_write_verdicts(&oracle, fp));
+        fclose(fp);
+    }
+}
+
 int main(void) {
     char err[200] = "";
     if (!otk_scenario_parse(SCENARIO_TEXT, &SIGNALS, &scn, err, sizeof(err))) {
@@ -456,5 +573,8 @@ int main(void) {
     RUN_TEST(test_reaction_time);
     RUN_TEST(test_window_not_covered_fails);
     RUN_TEST(test_reaction_fraction);
+    RUN_TEST(test_verdict_file);
+    RUN_TEST(test_verdict_reaction_fraction);
+    RUN_TEST(test_verdict_write_error);
     return check_report();
 }
