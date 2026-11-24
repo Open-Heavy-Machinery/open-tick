@@ -2,7 +2,7 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## Unreleased
+## [0.2.1] (2026-11-25): verdict files
 
 ### Added
 

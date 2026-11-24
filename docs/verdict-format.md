@@ -1,6 +1,6 @@
 # The verdict format
 
-A verdict file says what the acceptance oracle concluded about each criterion of a run, in a shape a program can read. It has one row per criterion: verdict, how the criterion ended, its window, its reaction and its first violation. Its times are on the trace's time axis, so a viewer can draw them over the trace: [open-rig](https://github.com/Open-Heavy-Machinery/open-rig) does (planned, its v0.2).
+A verdict file says what the acceptance oracle concluded about each criterion of a run, in a shape a program can read. It has one row per criterion: verdict, how the criterion ended, its window, its reaction and its first violation. Its times are on the trace's time axis, so a viewer can draw them over the trace: [open-rig](https://github.com/Open-Heavy-Machinery/open-rig) does, since its v0.2.
 
 The oracle writes it with `otk_oracle_write_verdicts()` (`opentick/oracle.h`), after the last `otk_oracle_step()` of the run. The verdict file and the text report of `otk_oracle_report()` come from the same state through the same functions in `core/src/oracle.c`, so they cannot disagree. The format is open-tick's since v0.2.1, and `core/src/oracle.c` defines it. The criteria it reports on are described in [criteria-format.md](criteria-format.md).
 
@@ -50,6 +50,6 @@ F1,PASS,ok,4.200000,5.000000,fault.speed_lost=1,4.000000,measured,110,,no drive 
 
 ## Who reads it
 
-- [open-rig](https://github.com/Open-Heavy-Machinery/open-rig) *(planned, its v0.2)*: shades each window over the trace and marks the event, the end of the reaction and the first violation.
+- [open-rig](https://github.com/Open-Heavy-Machinery/open-rig) (since its v0.2): shades each window over the trace and marks the event, the end of the reaction and the first violation.
 - open-crank *(planned)*: `open-crank-accept --verdicts` and `tools/board/bench.sh`, next to each trace.
 - Spreadsheets and scripts: split each line on its first ten commas.
