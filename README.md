@@ -4,7 +4,7 @@
 
 Part of [Open Heavy Machinery](https://open-heavy-machinery.github.io) ([open-tick's page](https://open-heavy-machinery.github.io/open-tick/)): open tools to practise and develop embedded control for machines you cannot keep at home, starting with heavy machinery.
 
-**Status: pre-alpha. v0.1 (extraction) is done.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) live here as a library, and open-crank runs on it as a git submodule, with traces byte-identical to before the move ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
+**Status: pre-alpha. v0.2 (oracle) is done.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) live here as a library, and open-crank runs on it as a git submodule, with traces byte-identical to before the move (v0.1). Since v0.2 the acceptance oracle lives here too: open-crank's acceptance suite grades on it with verdicts identical to before the move, and so does the flywheel example ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
 
 ## What it is
 
@@ -14,6 +14,7 @@ To a microcontroller, the world is voltages on pins, edges with timing and frame
 - **Scenarios and faults as data.** Signal names come from the application, and a typo fails loudly with its line number.
 - **Transports.** CAN and CAN FD today; *(planned)* the signal-level transports open-crank's Level 2 needs (tooth wheels, pulse capture, analog outputs); UART, quadrature encoders, GPIO and I²C/SPI slaves when a sibling application needs them.
 - **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Tang Nano 20K on the pins for open-crank's Level 2, and a Raspberry Pi Pico when open-robots starts.
+- **An oracle** that grades a device under test only by the frames it sends, against criteria written as data, with reaction times measured from the injected event. The application says what its frames mean; the criteria format is documented in [docs/criteria-format.md](docs/criteria-format.md).
 - **Traces** with columns the application registers, which refuse to shift a column silently. The file's shape is documented in [docs/trace-format.md](docs/trace-format.md).
 - *(planned)* **A fidelity contract.** Each machine says what it needs, each bridge says what it guarantees, and a run that cannot be faithful is refused instead of passing quietly.
 
@@ -40,12 +41,13 @@ ctest --test-dir build --output-on-failure
 
 ## Run the example
 
-`otk-flywheel` is the smallest machine that uses every module: a DC motor spins a flywheel, and a toy speed controller holds the speed over CAN, through the in-memory bridge. The scenario then cuts the speed frames. The controller must drop to its safe state and the flywheel coasts down.
+`otk-flywheel` is the smallest machine that uses every module: a DC motor spins a flywheel, and a toy speed controller holds the speed over CAN, through the in-memory bridge. The scenario then cuts the speed frames. The controller must drop to its safe state and the flywheel coasts down. With `--criteria`, the oracle grades the controller by its duty frames alone and prints a pass/fail report.
 
 ```sh
 ./build/otk-flywheel examples/flywheel/step.csv
 ./build/otk-flywheel examples/flywheel/step.csv --trace flywheel.csv
 ./build/otk-flywheel examples/flywheel/step.csv --driver paced    # the same run, in wall-clock time
+./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv
 ```
 
 ## Using it from an application

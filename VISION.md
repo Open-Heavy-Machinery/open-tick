@@ -1,6 +1,6 @@
 # open-tick: vision
 
-> **Status: v0.1 (extraction) done; v0.2 (oracle) next, pulled by open-crank v0.2.1.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
+> **Status: v0.1 (extraction) and v0.2 (oracle) done; v0.3 (transport faults) next, pulled by open-crank v0.3.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
 
 ## 1. The idea in one paragraph
 
