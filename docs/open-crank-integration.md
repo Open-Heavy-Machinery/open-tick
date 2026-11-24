@@ -1,6 +1,6 @@
 # Integrating open-tick into open-crank
 
-This records how open-crank came to consume open-tick: a trial run on a copy first, then the real pull request, [open-crank#1](https://github.com/Open-Heavy-Machinery/open-crank/pull/1), merged on 2026-11-19 as `ff4b02c`.
+This records how open-crank came to consume open-tick: a trial run on a copy first, then the real pull request, [open-crank#1](https://github.com/Open-Heavy-Machinery/open-crank/pull/1), merged on 2026-11-19 as `ff4b02c`. The second move, the acceptance oracle in v0.2, is recorded [at the end](#v02-the-oracle).
 
 ## Result in open-crank's CI
 
@@ -69,3 +69,12 @@ The trial covered exit criteria 1 and 2 of open-tick v0.1 for a copy; open-crank
 2. **`can_otk` is a library of its own inside `sim/`.** Moving it to `platforms/` was considered, but open-crank's in-memory loop (`sim/runtime/loop.c`, used by the tests and `open-crank-run`) needs it, and `sim/` may not depend on `platforms/`. As its own library it still keeps the simulator out of `open-crank-mc`.
 3. **Documentation in open-crank** was updated in the same pull request: ARCHITECTURE.md §3 and §4.6, the README's layout and build instructions, and the roadmap (v0.4 depends on open-tick v0.4; Track R's virtual-time driver is open-tick's).
 4. **CI compares traces.** The `traces` job (decision D19) runs on every open-crank pull request. A pull request that changes behaviour on purpose carries the `behaviour-change` label.
+
+## v0.2: the oracle
+
+The acceptance oracle was written and proven in open-crank v0.2.1 (`sim/oracle/`), then moved here: [#8](https://github.com/Open-Heavy-Machinery/open-tick/pull/8) (merged on 2026-11-23 as `6917b2f`, tagged `v0.2.0`) and [open-crank#26](https://github.com/Open-Heavy-Machinery/open-crank/pull/26) (`9da4e27`).
+
+- **What moved:** `oracle.h` and `oracle.c` into `core/`, renamed `otk_oracle_` / `OtkOracle` / `OTK_ORACLE_`, with time in `OtkNs` in the API. The criteria file format did not change; it is now open-tick's ([criteria-format.md](criteria-format.md)). The oracle's unit tests moved with it (`test_oracle`).
+- **What stayed in open-crank:** the J1939 observables and the filter for the device under test (`sim/accept/`), the criteria of each scenario and the two runners (in memory and on a CAN interface).
+- **Result:** the seven reports of `open-crank-accept-loop` and the output of `tools/accept_mutants.sh` identical byte for byte before and after; `ctest` 18/18; 19 mutations killed; on `vcan` in CI, seven PASS, 0 late steps and the same reaction times as before.
+- **Second consumer:** `otk-flywheel --criteria` grades the toy controller with [examples/flywheel/step.accept.csv](../examples/flywheel/step.accept.csv): 3 of 3 PASS, F1 reaction 110 ms.

@@ -10,7 +10,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 |---|---|---|
 | **v0.0** (done) | Vision and decisions | — |
 | **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank v0.1 |
-| **v0.2** | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
+| **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
 | **v0.3** | Transport faults | open-crank v0.3 |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
@@ -49,10 +49,12 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 **Pulled by** open-crank v0.2.1. The oracle is proven there first, in open-crank's acceptance suite over the bus, and then moved here, the same way the runtime moved in v0.1.
 
+**Status: done** (2026-11-23, tagged `v0.2.0`). The oracle moved in [#8](https://github.com/Open-Heavy-Machinery/open-tick/pull/8) and open-crank consumes it since [open-crank#26](https://github.com/Open-Heavy-Machinery/open-crank/pull/26). The record is in [docs/open-crank-integration.md](docs/open-crank-integration.md#v02-the-oracle).
+
 **Exit criteria**
 
-1. open-crank's acceptance verdicts are identical before and after the move.
-2. `otk-flywheel`'s scenario is graded by the oracle as well, as a second consumer that is not J1939.
+- [x] 1. open-crank's acceptance verdicts are identical before and after the move. *The seven reports of `open-crank-accept-loop` and the output of its `tools/accept_mutants.sh`, byte for byte; on `vcan` in CI, the same seven PASS and the same reaction times.*
+- [x] 2. `otk-flywheel`'s scenario is graded by the oracle as well, as a second consumer that is not J1939. *[examples/flywheel/step.accept.csv](examples/flywheel/step.accept.csv): three criteria (D1, R1, F1), 3 of 3 PASS, run in `ctest` and CI.*
 
 ## v0.3: Transport faults
 
