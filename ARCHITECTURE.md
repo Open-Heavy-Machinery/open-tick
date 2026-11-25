@@ -149,6 +149,22 @@ The acceptance oracle grades a run from the frames a device under test (DUT) sen
 
 **What it does not do.** It sees only frames, never the DUT's internal state. It grades the reaction, not its reason: a controller that stops driving because it lost its speed feedback and one that stops for any other reason look the same on the bus.
 
+### 3.10 Links and transport faults (`link.h`) *(v0.3, unreleased)*
+
+A link is one direction of a CAN path. The sender pushes each frame with the time it was sent, and the receiver pops the frames whose delivery time has come. On the way, the link can drop frames, drop one in N, delay them, add jitter, corrupt one byte, or go bus-off. A scenario drives each fault through six signals per link, `fault.link.<name>.*`. What each fault simulates, and what not, is in [docs/link-faults.md](docs/link-faults.md).
+
+**Why in `core/`.** Transport faults are the same for every application: a lost frame is lost whether it carries J1939 or a toy protocol. A link only moves `OtkCanFrame`s and never reads them. It works wherever frames pass through the application's process, in memory or between a SocketCAN socket and a bench. Domain faults, such as an engine ECU that ignores TSC1, stay in the application.
+
+**Why one fault per filter and values from the scenario.** Which frames a fault applies to is a property of the application's message set, so the application sets the filters in code. When a fault happens, and how strong it is, belongs to the test, so the scenario sets the values. Because they are ordinary signals, the oracle times reactions from them with no new syntax.
+
+**Why a frame never overtakes an earlier frame with the same identifier.** That is what a real bus does with one sender's frames. The rule also settles what happens when the delay drops while frames are in flight.
+
+**Why the jitter has its own seeded PRNG.** Free-run must stay byte-identical run to run. A PRNG inside the link, splitmix64 seeded by the application, gives the same draws on every host, and it does not depend on any other random numbers the application uses.
+
+**Why memory is fixed.** The delay line holds `OTK_CAN_QUEUE_MAX` frames in an array inside `OtkLink`, as the queues do. A full line counts an overflow instead of growing.
+
+**What it does not do.** It does not simulate a real bus-off, error frames, arbitration or bus load. A link is not a bus model.
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).
@@ -169,5 +185,6 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
 - **`test_scenario` keeps open-crank's parser cases**, adapted to tables and nanoseconds, so the extracted parser accepts and rejects what the original did.
 - **Wall-clock tests check only bounds that hold on a loaded machine.** A paced loop can never finish early; there is no upper bound to make them flaky.
 - **`test_socketcan` needs a CAN interface** and reports itself skipped, not passed, without one. CI sets up `vcan0` with a CAN FD MTU when the runner allows it, and warns when it cannot.
-- **`otk-flywheel` runs as a test.** Two free-running runs must produce identical traces (determinism), and a paced run must complete.
-- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 18 behaviours that applications rely on, and the tests must catch each one.
+- **`otk-flywheel` runs as a test.** Two free-running runs must produce identical traces (determinism), and a paced run must complete. With `delay.csv`, the oracle must pass the controller (`example_flywheel_delay_accept`), and two runs must give identical traces.
+- **`test_link`** covers each fault, its filter, delivery order, overflow, the scenario signals, and the determinism of the PRNG for a given seed.
+- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 27 behaviours that applications rely on, and the tests must catch each one. Eight of them are the links': one per fault, plus the order rule and the filter.

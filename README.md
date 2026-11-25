@@ -48,6 +48,7 @@ ctest --test-dir build --output-on-failure
 ./build/otk-flywheel examples/flywheel/step.csv --trace flywheel.csv
 ./build/otk-flywheel examples/flywheel/step.csv --driver paced    # the same run, in wall-clock time
 ./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv
+./build/otk-flywheel examples/flywheel/delay.csv --criteria examples/flywheel/delay.accept.csv  # SPEED delayed 300 ms (v0.3, unreleased)
 ```
 
 ## Using it from an application

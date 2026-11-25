@@ -78,6 +78,15 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 **Pulled by** open-crank v0.3.
 
+**In scope.**
+- Links (`opentick/link.h`), one per direction: drop, drop one in N, delay, jitter (seeded), corrupt one byte, and a simulated bus-off. Each fault except bus-off has its own identifier filter.
+- Scenario signals `fault.link.<name>.*`.
+- Same-identifier order kept.
+- The rules and limits in [docs/link-faults.md](docs/link-faults.md).
+- `otk-flywheel` with a speed link and `delay.csv`.
+
+Out of scope: a real bus-off, error frames, arbitration and bus load.
+
 **Exit criteria**
 
 1. open-crank v0.3's fault scenarios run on them.

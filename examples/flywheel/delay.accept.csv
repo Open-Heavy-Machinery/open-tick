@@ -1,0 +1,12 @@
+# Acceptance criteria for delay.csv: what any speed controller on this
+# flywheel must do when its speed frames start arriving 300 ms late, judged
+# only by its DUTY frames (0x200). Format: docs/criteria-format.md.
+#
+# The first delayed frame arrives 300 ms after the event, so the controller
+# sees no speed frame for 300 ms: G1 asks for no drive inside that gap only.
+# After it, frames arrive every 10 ms again; a constant delay cannot be seen
+# by a timeout on arrival, so no criterion asks for more (docs/link-faults.md).
+id,from,until,tolerance_ms,condition,text
+D1,begin,end,0,duty_pct <= 100,duty never above 100 %
+R1,1.0,fault.link.speed.delay_ms=300,0,duty_pct > 0,drives while its speed frames arrive on time
+G1,fault.link.speed.delay_ms=300+150ms,fault.link.speed.delay_ms=300+280ms,0,duty_pct == 0,no drive while no speed frame has arrived for longer than 150 ms

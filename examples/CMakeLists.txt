@@ -38,4 +38,17 @@ if(OTK_BUILD_TESTS)
              COMMAND ${CMAKE_COMMAND} -E compare_files ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/step.verdicts.csv
                      ${FLYWHEEL_OUT}/step.verdicts.csv)
     set_tests_properties(example_flywheel_verdicts PROPERTIES FIXTURES_REQUIRED flywheel_verdicts)
+
+    # Link faults (docs/link-faults.md): SPEED frames delayed past the controller's timeout.
+    set(FLYWHEEL_DELAY ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/delay.csv)
+    add_test(NAME example_flywheel_delay_accept
+             COMMAND otk-flywheel ${FLYWHEEL_DELAY} --quiet --criteria ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/delay.accept.csv)
+    add_test(NAME example_flywheel_delay_run_a
+             COMMAND otk-flywheel ${FLYWHEEL_DELAY} --quiet --trace ${FLYWHEEL_OUT}/flywheel_delay_a.csv)
+    add_test(NAME example_flywheel_delay_run_b
+             COMMAND otk-flywheel ${FLYWHEEL_DELAY} --quiet --trace ${FLYWHEEL_OUT}/flywheel_delay_b.csv)
+    set_tests_properties(example_flywheel_delay_run_a example_flywheel_delay_run_b PROPERTIES FIXTURES_SETUP flywheel_delay_traces)
+    add_test(NAME example_flywheel_delay_deterministic
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/flywheel_delay_a.csv ${FLYWHEEL_OUT}/flywheel_delay_b.csv)
+    set_tests_properties(example_flywheel_delay_deterministic PROPERTIES FIXTURES_REQUIRED flywheel_delay_traces)
 endif()

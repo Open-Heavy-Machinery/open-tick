@@ -14,9 +14,15 @@
  *     machine -> DUT   0x101 TARGET   every 20 ms   uint16 LE, rpm (operator panel)
  *     DUT -> machine   0x200 DUTY     every 10 ms   uint8, 0.5 %/bit
  *
+ * The machine's frames reach the DUT through a link (opentick/link.h) named
+ * `speed`, whose faults apply to SPEED (0x100) only. The scenario drives them
+ * with the signals fault.link.speed.* (examples/flywheel/delay.csv); with no
+ * fault set the link is transparent.
+ *
  * This is an example, not an application: the plant is a first-order sketch
  * and the message set is made up. It exists to show the pieces together:
- * a signal table, a scenario, the player, CAN queues, a trace and a driver.
+ * a signal table, a scenario, the player, CAN queues, a link, a trace and a
+ * driver.
  */
 
 #include <math.h>
@@ -25,6 +31,7 @@
 
 #include <opentick/can.h>
 #include <opentick/host/driver.h>
+#include <opentick/link.h>
 #include <opentick/oracle.h>
 #include <opentick/player.h>
 #include <opentick/scenario.h>
@@ -35,14 +42,22 @@
 #define ID_TARGET 0x101U
 #define ID_DUTY 0x200U
 #define PI 3.14159265358979323846
+#define LINK_SEED 1U /* the speed link's PRNG (jitter): fixed, so runs repeat */
 
 /* ---- Signals the scenario can set ---------------------------------------- */
 
-enum { SIG_TARGET_RPM, SIG_LOAD_NM, SIG_FAULT_SPEED_LOST, SIG_COUNT };
+enum {
+    SIG_TARGET_RPM,
+    SIG_LOAD_NM,
+    SIG_FAULT_SPEED_LOST,
+    SIG_LINK_SPEED, /* the six fault.link.speed.* signals */
+    SIG_COUNT = SIG_LINK_SPEED + OTK_LINK_SIGNAL_COUNT
+};
 static const char *const SIGNAL_NAMES[SIG_COUNT] = {
     [SIG_TARGET_RPM] = "target_rpm",
     [SIG_LOAD_NM] = "load_nm",
     [SIG_FAULT_SPEED_LOST] = "fault.speed_lost",
+    [SIG_LINK_SPEED] = OTK_LINK_SIGNAL_NAMES("speed"),
 };
 static const OtkSignalTable SIGNALS = { SIGNAL_NAMES, SIG_COUNT };
 
@@ -53,6 +68,7 @@ typedef struct {
     double target_rpm;
     double load_nm;
     int speed_lost;
+    OtkLinkFaults speed_link; /* fault.link.speed.* */
     /* state */
     uint64_t t_ms;
     double omega;       /* rad/s */
@@ -80,6 +96,7 @@ static void machine_apply(void *ctx, OtkSignalId signal, double value) {
         m->speed_lost = value != 0.0;
         break;
     default:
+        (void)otk_link_signal(&m->speed_link, SIG_LINK_SPEED, signal, value);
         break;
     }
 }
@@ -302,11 +319,18 @@ int main(int argc, char **argv) {
     otk_player_init(&player, &g_scenario, machine_apply, &m);
 
     /* The in-memory bridge: frames from the machine reach the DUT in the same
-     * step; frames from the DUT reach the machine at the start of the next. */
+     * step, through the speed link; frames from the DUT reach the machine at
+     * the start of the next. */
     static OtkCanQueue to_dut;
     static OtkCanQueue to_machine;
+    static OtkLink speed_link;
     otk_can_queue_init(&to_dut, 16U);
     otk_can_queue_init(&to_machine, 16U);
+    otk_link_init(&speed_link, OTK_CAN_QUEUE_MAX, LINK_SEED);
+    static const OtkLinkFilter ONLY_SPEED = { true, false, ID_SPEED, OTK_CAN_SFF_MASK };
+    for (int fault = 0; fault < (int)OTK_LINK_FAULT_COUNT; fault++) {
+        otk_link_set_filter(&speed_link, (OtkLinkFault)fault, &ONLY_SPEED);
+    }
 
     OtkDriver driver;
     otk_driver_init(&driver, kind, otk_ns_from_ms(STEP_MS));
@@ -330,10 +354,15 @@ int main(int argc, char **argv) {
 
         machine_step(&m, &to_dut);
 
+        otk_link_set_faults(&speed_link, &m.speed_link);
         for (size_t i = 0; i < otk_can_queue_count(&to_dut); i++) {
-            dut_rx(&d, otk_can_queue_at(&to_dut, i), m.t_ms);
+            (void)otk_link_push(&speed_link, otk_can_queue_at(&to_dut, i), otk_ns_from_ms(m.t_ms));
         }
         otk_can_queue_clear(&to_dut);
+        OtkCanFrame rx;
+        while (otk_link_pop(&speed_link, otk_ns_from_ms(m.t_ms), &rx)) {
+            dut_rx(&d, &rx, m.t_ms);
+        }
         dut_step(&d, m.t_ms, &to_machine);
 
         if (trace_fp != NULL) {
@@ -364,7 +393,7 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
-    if (to_dut.overflows != 0U || to_machine.overflows != 0U) {
+    if (to_dut.overflows != 0U || to_machine.overflows != 0U || speed_link.overflows != 0U) {
         return 1;
     }
     if (criteria_path != NULL) {

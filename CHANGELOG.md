@@ -2,6 +2,21 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
+## Unreleased
+
+### Added
+
+- **Links and transport faults** (v0.3, in progress): `opentick/link.h`.
+  - A link is one direction of a CAN path, with `otk_link_push()` and `otk_link_pop()`.
+  - Its faults are drop, drop one in N, delay, jitter, corrupt and bus-off. Each fault except bus-off has an identifier filter.
+  - A frame never overtakes an earlier frame with the same identifier.
+  - Memory is fixed: a delay line of `OTK_CAN_QUEUE_MAX` frames, with overflows counted.
+  - Jitter comes from the link's own seeded PRNG, so free-run stays deterministic.
+- Scenario signals `fault.link.<name>.drop`, `.drop_one_in`, `.delay_ms`, `.jitter_ms`, `.corrupt` and `.bus_off`, through `OTK_LINK_SIGNAL_NAMES()` and `otk_link_signal()`.
+- [docs/link-faults.md](docs/link-faults.md): what each fault simulates and what not, and why `corrupt` means "the CRC passed, the content is wrong". It also explains why a constant delay cannot be seen from arrival times.
+- `otk-flywheel` sends the machine's frames through a link named `speed` (filter `0x100`). [examples/flywheel/delay.csv](examples/flywheel/delay.csv) delays SPEED by 300 ms, and [examples/flywheel/delay.accept.csv](examples/flywheel/delay.accept.csv) asks for no drive inside the gap. Tests: `example_flywheel_delay_accept` and `example_flywheel_delay_deterministic`. `step.csv` gives the same trace, report and verdicts as before, byte for byte.
+- `test_link`, and eight link mutations in `tools/mutation_check.sh` (27 in all).
+
 ## [0.2.1] (2026-11-25): verdict files
 
 ### Added
