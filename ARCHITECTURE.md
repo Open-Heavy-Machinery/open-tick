@@ -149,7 +149,7 @@ The acceptance oracle grades a run from the frames a device under test (DUT) sen
 
 **What it does not do.** It sees only frames, never the DUT's internal state. It grades the reaction, not its reason: a controller that stops driving because it lost its speed feedback and one that stops for any other reason look the same on the bus.
 
-### 3.10 Links and transport faults (`link.h`) *(v0.3, unreleased)*
+### 3.10 Links and transport faults (`link.h`) *(v0.3)*
 
 A link is one direction of a CAN path. The sender pushes each frame with the time it was sent, and the receiver pops the frames whose delivery time has come. On the way, the link can drop frames, drop one in N, delay them, add jitter, corrupt one byte, or go bus-off. A scenario drives each fault through six signals per link, `fault.link.<name>.*`. What each fault simulates, and what not, is in [docs/link-faults.md](docs/link-faults.md).
 

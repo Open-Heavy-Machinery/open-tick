@@ -12,7 +12,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.1** (done) | Extraction: open-crank runs on open-tick | open-crank v0.1 |
 | **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
 | **v0.2.1** (done) | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
-| **v0.3** | Transport faults | open-crank v0.3 |
+| **v0.3** (done) | Transport faults | open-crank v0.3 |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
 | **Track R** | Renode virtual-time driver (parallel) | open-crank Track R |
@@ -87,11 +87,13 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 
 Out of scope: a real bus-off, error frames, arbitration and bus load.
 
+**Status: done** (2026-11-25, tagged `v0.3.0`).
+
 **Exit criteria**
 
-1. open-crank v0.3's fault scenarios run on them.
-2. Each fault has a mutation check that fails if the fault is not applied.
-3. `otk-flywheel` uses at least one.
+- [x] 1. open-crank v0.3's fault scenarios run on them. *[open-crank#33](https://github.com/Open-Heavy-Machinery/open-crank/pull/33): the bench has two links, `mc` and `engine`; four scenarios (`engine_status_delay`, `engine_status_jitter`, `speed_command_intermittent`, `mc_bus_off`) use delay, jitter, drop one in N and bus-off, in memory, on `vcan` and, in a first run, on the reference board. `corrupt` waits for open-crank v0.3.1 (TSC1 checksum).*
+- [x] 2. Each fault has a mutation check that fails if the fault is not applied. *[#12](https://github.com/Open-Heavy-Machinery/open-tick/pull/12): `tools/mutation_check.sh` has one per fault (drop, drop one in N, delay, jitter, corrupt, bus-off), plus the order rule and the filters; 27 mutations in all.*
+- [x] 3. `otk-flywheel` uses at least one. *[#12](https://github.com/Open-Heavy-Machinery/open-tick/pull/12): the `speed` link, with [examples/flywheel/delay.csv](examples/flywheel/delay.csv) and its criteria.*
 
 ## v0.4: Tang Nano 20K bridge
 
