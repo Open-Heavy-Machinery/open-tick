@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(open-tick VERSION 0.2.1 LANGUAGES C)
+project(open-tick VERSION 0.3.0 LANGUAGES C)
 
 # open-tick builds on its own (tests, examples, CI) and as a subproject of an
 # application, through add_subdirectory() or FetchContent. As a subproject it

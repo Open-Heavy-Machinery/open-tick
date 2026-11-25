@@ -2,11 +2,11 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## Unreleased
+## [0.3.0] (2026-11-25): transport faults
 
 ### Added
 
-- **Links and transport faults** (v0.3, in progress): `opentick/link.h`.
+- **Links and transport faults** (v0.3): `opentick/link.h`.
   - A link is one direction of a CAN path, with `otk_link_push()` and `otk_link_pop()`.
   - Its faults are drop, drop one in N, delay, jitter, corrupt and bus-off. Each fault except bus-off has an identifier filter.
   - A frame never overtakes an earlier frame with the same identifier.

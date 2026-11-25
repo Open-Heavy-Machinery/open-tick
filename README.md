@@ -4,7 +4,7 @@
 
 Part of [Open Heavy Machinery](https://open-heavy-machinery.github.io) ([open-tick's page](https://open-heavy-machinery.github.io/open-tick/)): open tools to practise and develop embedded control for machines you cannot keep at home, starting with heavy machinery.
 
-**Status: pre-alpha. v0.2.1 (verdict files) is done.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) live here as a library, and open-crank runs on it as a git submodule, with traces byte-identical to before the move (v0.1). Since v0.2 the acceptance oracle lives here too: open-crank's acceptance suite grades on it with verdicts identical to before the move, and so does the flywheel example ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
+**Status: pre-alpha. v0.3 (transport faults) is done.** The machine-independent parts of [open-crank](https://github.com/Open-Heavy-Machinery/open-crank) live here as a library, and open-crank runs on it as a git submodule, with traces byte-identical to before the move (v0.1). Since v0.2 the acceptance oracle lives here too: open-crank's acceptance suite grades on it with verdicts identical to before the move, and so does the flywheel example ([docs/open-crank-integration.md](docs/open-crank-integration.md)). Since v0.3, links put transport faults (lost, delayed, jittered or corrupted frames, bus-off) between a sender and a receiver, driven by the scenario ([docs/link-faults.md](docs/link-faults.md)); open-crank's fault scenarios run on them. Anything marked *(planned)* does not exist yet. The decisions are in [VISION.md](VISION.md), the code in [ARCHITECTURE.md](ARCHITECTURE.md), the plan in [ROADMAP.md](ROADMAP.md).
 
 ## What it is
 
@@ -48,7 +48,7 @@ ctest --test-dir build --output-on-failure
 ./build/otk-flywheel examples/flywheel/step.csv --trace flywheel.csv
 ./build/otk-flywheel examples/flywheel/step.csv --driver paced    # the same run, in wall-clock time
 ./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv
-./build/otk-flywheel examples/flywheel/delay.csv --criteria examples/flywheel/delay.accept.csv  # SPEED delayed 300 ms (v0.3, unreleased)
+./build/otk-flywheel examples/flywheel/delay.csv --criteria examples/flywheel/delay.accept.csv  # SPEED delayed 300 ms (v0.3)
 ```
 
 ## Using it from an application
