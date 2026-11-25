@@ -1,0 +1,11 @@
+# otk-flywheel: spin up, take a load, then the speed link delays SPEED (0x100)
+# by 300 ms for a second. The first delayed frame arrives 300 ms late, so the
+# controller's speed feedback goes stale and it must drop to its safe state.
+# Then frames arrive every 10 ms again, only 300 ms old, and it drives on:
+# a constant delay cannot be seen by a timeout on arrival (docs/link-faults.md).
+time_s,signal,value
+0.0,target_rpm,1500
+1.5,load_nm,0.3
+3.0,fault.link.speed.delay_ms,300
+4.0,fault.link.speed.delay_ms,0
+5.0,end,0

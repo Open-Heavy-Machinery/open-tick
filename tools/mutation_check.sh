@@ -74,6 +74,7 @@ CAN=core/src/can.c
 TRACE=core/src/trace.c
 PACER=host/src/pacer.c
 ORACLE=core/src/oracle.c
+LINK=core/src/link.c
 
 mutate "signals: duplicate names accepted" $SIG \
     "if (strcmp(name, t->names[j]) == 0) {" "if (false) {"
@@ -120,6 +121,26 @@ mutate "pacer: deadline not advanced (runs unpaced)" $PACER \
     "p->next.tv_nsec += (long)(p->period % OTK_NS_PER_S);" ";"
 mutate "verdicts: reaction written from the window start, not the event" $ORACLE \
     "ok = ok && print_ms(reaction_ns(c), fp) >= 0;" "ok = ok && print_ms(c->true_since_ns - c->from_ns, fp) >= 0;"
+mutate "link: drop loses nothing" $LINK \
+    "if (fl->drop && matches(link, OTK_LINK_DROP, frame)) {" "if (false) {"
+mutate "link: drop_one_in loses nothing" $LINK \
+    "if (link->matched_one_in >= fl->drop_one_in) {" "if (false) {"
+mutate "link: delay not applied" $LINK \
+    "due = add_sat(due, fl->delay);" ";"
+mutate "link: jitter not applied" $LINK \
+    "due = add_sat(due, (fl->jitter == UINT64_MAX) ? r : r % (fl->jitter + 1U));" "(void)r;"
+mutate "link: corrupt flips the last byte, not byte N" $LINK \
+    "s->frame.data[fl->corrupt - 1U] ^= 0xFFU;" "s->frame.data[frame->len - 1U] ^= 0xFFU;"
+mutate "link: bus_off lets pushed frames through" $LINK \
+    "if (fl->bus_off) {
+        link->bus_off_lost++;
+        return false;" "if (false) {
+        link->bus_off_lost++;
+        return false;"
+mutate "link: a frame may overtake an earlier one with the same id" $LINK \
+    "if (same_id(&link->line[i].frame, frame) && link->line[i].due > due) {" "if (false) {"
+mutate "link: an id filter matches every frame" $LINK \
+    "return extended == flt->extended && ((f->id ^ flt->id) & flt->mask) == 0U;" "return true;"
 
 echo
 echo "$killed mutations killed, $problems problems"
