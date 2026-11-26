@@ -2,6 +2,22 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
+## [Unreleased]
+
+### Added
+
+- **Frame logs** (v0.3.1): `opentick/framelog.h`, `otk_framelog_init()` and `otk_framelog_frame()`. One row per CAN frame with two times: `t_s`, the step in which the frame crossed the machine's side (it places the frame on the trace's axis), and `t_bus_s`, when it was on the device under test's side, measured by the clock that the metadata line names (`sim`, `kernel`, `host`, `bridge`, `none`) with its error bound. Plus `dir`, the link's name, the frame, and what the link did to it.
+- [docs/frame-log-format.md](docs/frame-log-format.md): the frame log format as a contract (version 1).
+- Links report what they did to each frame: `otk_link_push_ex()` and `otk_link_pop_ex()` (`OtkLinkInfo`: the reason for a loss, corruption, push and due times). `pop_ex` also returns frames lost to bus-off when they fall due.
+- SocketCAN timestamps: `otk_socketcan_enable_timestamps()`, `otk_socketcan_recv_ex()` (kernel timestamp, own frame), `otk_socketcan_clock_ns()`, `otk_socketcan_run_time()` and `otk_socketcan_bus_clock()`.
+- `otk-flywheel --frames <file>`. It writes [examples/flywheel/delay.frames.csv](examples/flywheel/delay.frames.csv) for `delay.csv`, checked byte for byte (`example_flywheel_frames`) and between two runs (`example_flywheel_frames_deterministic`).
+- `test_framelog`; `test_link` and `test_socketcan` extended; eleven mutations in `tools/mutation_check.sh` (38 in all).
+
+### Changed
+
+- `otk_link_push()` and `otk_link_pop()` are now `push_ex` and `pop_ex` without the report. Their behaviour is unchanged: `test_link`'s existing tests are untouched, and the flywheel's traces and verdicts are byte-identical. `OtkLinkSlot` has two more fields (`pushed`, `corrupted`); `OtkSocketCan` has two more (`timestamps`, `own_msgs`), set by `otk_socketcan_open()`.
+- README: the mutation count was out of date (18); it is 38.
+
 ## [0.3.0] (2026-11-25): transport faults
 
 ### Added

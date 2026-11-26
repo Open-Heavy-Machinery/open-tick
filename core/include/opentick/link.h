@@ -35,6 +35,11 @@
  *
  * Memory is fixed: the delay line holds up to OTK_CAN_QUEUE_MAX frames. A
  * frame pushed into a full line is lost and counted as an overflow.
+ *
+ * What happened to each frame: otk_link_push_ex() and otk_link_pop_ex() say
+ * why a frame was lost, whether it was corrupted and when it was pushed, for
+ * a frame log (framelog.h). otk_link_push() and otk_link_pop() are the same
+ * without that report.
  */
 
 #ifndef OPENTICK_LINK_H
@@ -79,8 +84,27 @@ typedef struct {
 
 typedef struct {
     OtkCanFrame frame;
-    OtkNs due; /**< delivery time */
+    OtkNs due;      /**< delivery time */
+    OtkNs pushed;   /**< when the sender sent it */
+    bool corrupted; /**< corrupt flipped a byte */
 } OtkLinkSlot;
+
+/** @brief Why a link lost a frame. */
+typedef enum {
+    OTK_LINK_LOST_NONE = 0,    /**< not lost */
+    OTK_LINK_LOST_DROP,        /**< drop */
+    OTK_LINK_LOST_DROP_ONE_IN, /**< drop_one_in */
+    OTK_LINK_LOST_BUS_OFF,     /**< bus_off, when sent or when it fell due */
+    OTK_LINK_LOST_OVERFLOW     /**< the line was full */
+} OtkLinkLoss;
+
+/** @brief What a link did to one frame. */
+typedef struct {
+    OtkLinkLoss lost;
+    bool corrupted; /**< a byte was flipped (the frame is as delivered) */
+    OtkNs pushed;   /**< when the sender sent it */
+    OtkNs due;      /**< when it was due; for a frame lost when sent, the send time */
+} OtkLinkInfo;
 
 typedef struct {
     OtkLinkFilter filters[OTK_LINK_FAULT_COUNT]; /**< bus_off's is not used */
@@ -120,12 +144,28 @@ void otk_link_set_faults(OtkLink *link, const OtkLinkFaults *faults);
 bool otk_link_push(OtkLink *link, const OtkCanFrame *frame, OtkNs t);
 
 /**
+ * @brief otk_link_push(), and what happened to the frame in @p info (may be
+ *        NULL): lost and why, or in flight with its due time and whether it
+ *        was corrupted.
+ */
+bool otk_link_push_ex(OtkLink *link, const OtkCanFrame *frame, OtkNs t, OtkLinkInfo *info);
+
+/**
  * @brief The next frame due at or before @p now, in delivery order (ties in
  *        push order). While bus_off is on, frames that fall due are lost and
  *        nothing is returned.
  * @return true and the frame in @p out, or false if none is due
  */
 bool otk_link_pop(OtkLink *link, OtkNs now, OtkCanFrame *out);
+
+/**
+ * @brief Like otk_link_pop(), but a frame that falls due while bus_off is on
+ *        is returned too, with info->lost = OTK_LINK_LOST_BUS_OFF: it is
+ *        counted as lost and must not be delivered. @p info may be NULL.
+ * @return true and the frame in @p out (delivered or lost, see @p info), or
+ *         false if none is due
+ */
+bool otk_link_pop_ex(OtkLink *link, OtkNs now, OtkCanFrame *out, OtkLinkInfo *info);
 
 /** @brief Frames in flight. */
 size_t otk_link_count(const OtkLink *link);

@@ -13,6 +13,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
 | **v0.2.1** (done) | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
 | **v0.3** (done) | Transport faults | open-crank v0.3 |
+| **v0.3.1** | Frame logs: every frame of a run, with logical and bus time | open-rig v0.3 (bus view) |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
 | **Track R** | Renode virtual-time driver (parallel) | open-crank Track R |
@@ -94,6 +95,24 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - [x] 1. open-crank v0.3's fault scenarios run on them. *[open-crank#33](https://github.com/Open-Heavy-Machinery/open-crank/pull/33): the bench has two links, `mc` and `engine`; four scenarios (`engine_status_delay`, `engine_status_jitter`, `speed_command_intermittent`, `mc_bus_off`) use delay, jitter, drop one in N and bus-off, in memory, on `vcan` and, in a first run, on the reference board. `corrupt` waits for open-crank v0.3.1 (TSC1 checksum).*
 - [x] 2. Each fault has a mutation check that fails if the fault is not applied. *[#12](https://github.com/Open-Heavy-Machinery/open-tick/pull/12): `tools/mutation_check.sh` has one per fault (drop, drop one in N, delay, jitter, corrupt, bus-off), plus the order rule and the filters; 27 mutations in all.*
 - [x] 3. `otk-flywheel` uses at least one. *[#12](https://github.com/Open-Heavy-Machinery/open-tick/pull/12): the `speed` link, with [examples/flywheel/delay.csv](examples/flywheel/delay.csv) and its criteria.*
+
+## v0.3.1: Frame logs
+
+**Goal.** Every CAN frame of a run in a file, on the trace's time axis, with what the links did to it, so that a viewer can show the bus next to the trace and the verdicts.
+
+**Pulled by** open-rig v0.3 (a bus view) and open-crank's fault scenarios, where what matters happens on the bus: a frame dropped, delayed or corrupted, and what the device under test did next.
+
+**In scope.** `otk_framelog_*` in `core/`; the format as a contract with two times, logical (`t_s`, which places the frame on the axis) and bus (`t_bus_s`, measured, with the clock that measured it named in the file) ([docs/frame-log-format.md](docs/frame-log-format.md)); links that report what they did to each frame (`otk_link_push_ex()`, `otk_link_pop_ex()`); kernel timestamps from SocketCAN, for received frames and for the socket's own sent frames; `otk-flywheel --frames`.
+
+**Out of scope.** Signal-level transports, and the `bridge` clock, which come with v0.4's hard driver; error and RTR frames.
+
+**Status:** in progress *(planned until merged)*.
+
+**Exit criteria**
+
+- [ ] 1. In memory, a link's delay shows exactly as `t_bus_s − t_s`; lost frames carry their reason; two free-run runs give the same file byte for byte.
+- [ ] 2. Over SocketCAN (`vcan` in CI), received and sent frames carry kernel timestamps, and code that does not ask for them sees exactly what it saw before.
+- [ ] 3. Existing traces and verdict files are unchanged, byte for byte.
 
 ## v0.4: Tang Nano 20K bridge
 
