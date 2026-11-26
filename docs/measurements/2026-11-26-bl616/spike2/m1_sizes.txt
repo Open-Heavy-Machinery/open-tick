@@ -1,2 +1,0 @@
-pingpong_bench sizes on /dev/ttyUSB1 at 3000000 baud, 2026-11-26 16:58:50
-see the CSV

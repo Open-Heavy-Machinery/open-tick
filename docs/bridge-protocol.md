@@ -167,7 +167,7 @@ The example's numbers are illustrative. Each machine and bridge writes its own; 
 
 Tang Nano 20K, on-board BL616 USB debugger with Sipeed's firmware, UART at 3 Mbaud, a Python host. These are the numbers the decisions above rest on. Reports, sources and the checksums of the raw data are in [measurements/2026-11-26-bl616/](measurements/2026-11-26-bl616/).
 
-**F-13: how much one exchange carries.** 200 back-to-back exchanges per size; none lost or corrupted.
+**F-13: how much one exchange carries.** Back-to-back exchanges, 200 per size up to 448 B and 100 per size above; none lost or corrupted.
 
 | Request B | Reply B | Round trip p50 / p99 |
 |---|---|---|
@@ -195,7 +195,7 @@ Good samples came with gaps of up to 16 s.
 |---|---|---|---|---|
 | 8 ms | 0 (min 7) | **82 (0.137 %)** (min 4) | 0 (min 6) | **59 (0.098 %)** (min 6) |
 | 16 ms | 0 (min 14) | 0 (min 11) | 0 (min 15) | 0 (min 6) |
-| 32 ms | 0 (min 26) | 0 (min 26) | 0 (min 30) | 0 (min 22) |
+| 32 ms | 0 (min 25) | 0 (min 26) | 0 (min 30) | 0 (min 22) |
 
 - No exchange was lost in any run. Every applied setpoint matched the one sent, except the first of each run, before any setpoint was applied.
 - Host A and host B are two Linux PCs with 22 and 20 CPUs, using the same board.

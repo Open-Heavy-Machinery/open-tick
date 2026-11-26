@@ -21,9 +21,10 @@ It is **spike code, not open-tick code.**
 | `spike1/link_*.txt` | First spike, host A: UART echo at 115 200 to 3 375 000 baud. 1000 round trips of 8 B, then paced throughput. Its gateware is not kept here; the results are. |
 | `spike2/pingpong.v`, `tb_pingpong.v`, `tang_nano_20k.cst`, `build.sh` | Second spike: a host-initiated ping-pong bridge with a 1 ms setpoint FIFO and a tick counter, its testbench, pins and build. `build.sh` expects the venv at `~/.cache/ohm-fpga/venv`. |
 | `spike2/pingpong_bench.py` | The host side: `sizes` (M1), `sync` (M2), `hold` (M3). |
-| `spike2/m1_sizes.txt`, `m2_sync*.txt`, `m3_hold_*.txt`, `m3_mismatch_check.txt` | Host A's reports. |
+| `spike2/m1_sizes.csv`, `m1_sizes_large.csv` | M1, host A: one row per size (exchanges, losses, round trip min/p50/p99/max, goodput). |
+| `spike2/m2_sync*.txt`, `m3_hold_*.txt`, `m3_mismatch_check.txt` | Host A's reports. |
 | `host-b/m3_hold_*.txt` | M3 repeated on host B. USB serial numbers are masked as `<serial>`. |
-| `raw-csv.md5` | md5 of every raw CSV behind these reports. The CSVs (about 4.7 MB) are kept by the maintainers, not in git. |
+| `raw-csv.md5` | md5 of every raw CSV behind these reports, including the two M1 summaries kept here. The per-exchange CSVs (about 4.7 MB) are kept by the maintainers, not in git. |
 | `requirements.lock` | The pinned toolchain. |
 
 ## What was measured, and the result
