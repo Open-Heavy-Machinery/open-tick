@@ -65,4 +65,33 @@ if(OTK_BUILD_TESTS)
     add_test(NAME example_flywheel_frames_deterministic
              COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/delay.frames.csv ${FLYWHEEL_OUT}/delay_b.frames.csv)
     set_tests_properties(example_flywheel_frames example_flywheel_frames_deterministic PROPERTIES FIXTURES_REQUIRED flywheel_frames)
+
+    # --seed (the speed link's jitter, examples/flywheel/jitter.csv): no --seed
+    # is seed 1; the same seed twice gives the same frames; seeds 1 and 2 differ.
+    set(FLYWHEEL_JITTER ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/jitter.csv)
+    foreach(run default 1 2 2b)
+        if(run STREQUAL "default")
+            set(seed_args "")
+        elseif(run STREQUAL "2b")
+            set(seed_args --seed 2)
+        else()
+            set(seed_args --seed ${run})
+        endif()
+        add_test(NAME example_flywheel_jitter_${run}
+                 COMMAND otk-flywheel ${FLYWHEEL_JITTER} --quiet ${seed_args}
+                         --frames ${FLYWHEEL_OUT}/jitter_${run}.frames.csv)
+        set_tests_properties(example_flywheel_jitter_${run} PROPERTIES FIXTURES_SETUP flywheel_jitter)
+    endforeach()
+    add_test(NAME example_flywheel_seed_default_is_1
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/jitter_default.frames.csv ${FLYWHEEL_OUT}/jitter_1.frames.csv)
+    add_test(NAME example_flywheel_seed_deterministic
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/jitter_2.frames.csv ${FLYWHEEL_OUT}/jitter_2b.frames.csv)
+    add_test(NAME example_flywheel_seed_changes_draws
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/jitter_1.frames.csv ${FLYWHEEL_OUT}/jitter_2.frames.csv)
+    set_tests_properties(example_flywheel_seed_changes_draws PROPERTIES WILL_FAIL TRUE)
+    set_tests_properties(example_flywheel_seed_default_is_1 example_flywheel_seed_deterministic
+                         example_flywheel_seed_changes_draws PROPERTIES FIXTURES_REQUIRED flywheel_jitter)
+    add_test(NAME example_flywheel_seed_rejects_bad
+             COMMAND otk-flywheel ${FLYWHEEL_JITTER} --quiet --seed -1)
+    set_tests_properties(example_flywheel_seed_rejects_bad PROPERTIES WILL_FAIL TRUE)
 endif()
