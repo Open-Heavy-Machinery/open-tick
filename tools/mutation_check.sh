@@ -235,6 +235,21 @@ mutate "bridge: capture tick extended past the reference" $BRG \
 mutate "bridge: phase increment truncated, not rounded" $BRG \
     "/ (double)tick_hz + 0.5;" "/ (double)tick_hz;"
 
+# The hard driver's host side (v0.4 step 3).
+HARD=host/src/hard.c
+mutate "hard: a stale reply (another seq) taken as the answer" $HARD \
+    "if (m.seq == l->seq && (m.type & OTK_BRIDGE_REPLY)) {" "if (m.type & OTK_BRIDGE_REPLY) {"
+mutate "hard: a retransmission sent with a new seq" $HARD \
+    "    if (!retransmit) {
+        l->seq++;" "    if (true) {
+        l->seq++;"
+mutate "hard: timeouts not counted" $HARD \
+    "            l->timeouts++;" "            (void)0;"
+mutate "hard: bins with no good sample kept in the clock mapping" $HARD \
+    "const double keep_below = lowest + OTK_HARD_SYNC_SLACK_NS;" "const double keep_below = INFINITY;"
+mutate "hard: every reply counted as the next cycle" $HARD \
+    "k[i] = k[i - 1] + nearbyint((double)(t[i] - t[i - 1]) / p1);" "k[i] = k[i - 1] + 1.0;"
+
 echo
 echo "$killed mutations killed, $problems problems"
 [[ $problems -eq 0 ]]

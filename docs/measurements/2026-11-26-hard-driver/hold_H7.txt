@@ -1,0 +1,8 @@
+drained 0 bytes before the first exchange
+bridge: tick 27000000 Hz, 6 captures, 4 analog outputs of 16 bits
+hold H = 7 steps (1 ms), locked: 60009 steps, underruns 4 (0.007 %), lowest fill at a reply 6, applied setpoint wrong 0 of 10002 checked
+  locked: 600 us of margin plus the request's and reply's time on the wire before each forwarding instant
+hold: 10003 exchanges, 0 timeouts
+  sends late against their plan us: p50 2.1 p99 10.8 max 237.0 (spin 300 us)
+  round trip us: p1 952 p50 1096 p99 1292 max 5923
+  delay (round trip minus the bridge's own time): below 300 us 0.0 %, below 500 us 0.0 %, below 1 ms 98.8 %

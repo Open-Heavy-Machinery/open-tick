@@ -134,7 +134,8 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - the host-to-bridge protocol, version 1, is specified ([docs/bridge-protocol.md](docs/bridge-protocol.md)), and its codec is in `core/` (`opentick/bridge.h`);
 - the Tang Nano 20K gateware is built and simulated against the codec, not yet run on a board ([gateware/tang_nano_20k/](gateware/tang_nano_20k/README.md));
 - the toolchain decision is taken: the open toolchain, pinned;
-- the hard driver and the fidelity contract are not built.
+- the hard driver's host side is built and measured on the board: link, clock mapping, exchanges scheduled against the BL616's cycle ([docs/measurements/2026-11-26-hard-driver/](docs/measurements/2026-11-26-hard-driver/)). With the host in C, H = 16 ms holds with every CPU busy, and H = 12 ms on a quiet host;
+- stepping a plant on the bridge's clock, CAN on that clock and the fidelity contract are not built.
 
 **Exit criteria**
 

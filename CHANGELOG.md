@@ -6,6 +6,21 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **The hard driver's host side** (`host/include/opentick/host/hard.h`; v0.4, step 3), Linux:
+  - the serial link: one request, one reply, banner and stale replies skipped;
+  - the clock mapping (§4), leaving out bins with no good sample;
+  - the link's forwarding cycle, estimated from the replies' arrival times;
+  - `otk_hard_wait_until()`: sleep, then spin, timer slack 1 ns;
+  - defaults H = 16 steps and a 600 µs margin.
+- **`otk-hard-probe`**, which measures a bridge with it: `cycle`, `sweep`, `locked`, `hold`.
+- **Measured on the board** ([docs/measurements/2026-11-26-hard-driver/](docs/measurements/2026-11-26-hard-driver/)):
+  - only the BL616's replies wait, for a forwarding instant every 5 999.3 µs;
+  - exchanges scheduled against that cycle come back in about 1 ms instead of up to 6;
+  - with the host in C, H = 12 ms holds on a quiet host, and H = 16 ms with every CPU busy;
+  - the gateware ran on the board for the first time, and held every run.
+- `docs/bridge-protocol.md` §4.1: asymmetric links. The bound published stays symmetric, setpoints are aimed from the fast direction, and exchanges are scheduled against the link's cycle.
+- `test_hard` (no board needed) and five more mutations, 58 in all.
+
 - **The Tang Nano 20K bridge's gateware** (`gateware/tang_nano_20k/`; v0.4, step 2). Simulated and synthesised, not yet run on a board.
   - It covers protocol v1's bridge side: framing and CRC, configure/start/stop/exchange, the five states, a 64-setpoint FIFO in block RAM, steps with underruns, late setpoints and the link timeout.
   - Signals: the 60−2 crank and cam from a 48-bit phase, six injector captures, four sigma-delta analog outputs.

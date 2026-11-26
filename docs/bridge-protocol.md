@@ -3,8 +3,12 @@
 **Status: specification; partly built.** This is the contract between open-tick's hard driver and every signal-level bridge (the Tang Nano 20K, and later the Raspberry Pi Pico) ([ROADMAP.md](../ROADMAP.md), v0.4).
 - **Built:**
   - the codec, in [`core/include/opentick/bridge.h`](../core/include/opentick/bridge.h): framing, CRC, every payload, a parser that resynchronises, the unit conversions;
-  - the Tang Nano 20K's gateware, in [`gateware/tang_nano_20k/`](../gateware/tang_nano_20k/README.md), simulated against that codec and not yet run on a board.
-- **Not built yet:** the hard driver, which times the exchanges and maps the clocks *(planned)*, and the fidelity contract's checker *(planned)*.
+  - the Tang Nano 20K's gateware, in [`gateware/tang_nano_20k/`](../gateware/tang_nano_20k/README.md), simulated against that codec and run on the board;
+  - the hard driver's host side, in [`host/include/opentick/host/hard.h`](../host/include/opentick/host/hard.h): the serial link, the clock mapping, and the estimate of the link's forwarding cycle that exchanges are scheduled against (§4.1). `otk-hard-probe` measures with it.
+- **Not built yet:**
+  - the hard driver inside open-tick's step loop, which steps a plant on the bridge's clock *(planned)*;
+  - CAN on the bridge's clock (§5) *(planned)*;
+  - the fidelity contract's checker *(planned)*.
 
 It carries what crosses the USB link between the host, which runs the core and the plant, and a signal-level bridge, which produces and captures edges and levels on the pins of the device under test (DUT) ([VISION.md §5.2](../VISION.md#52-two-kinds-of-transport)). Message transports such as CAN stay on the host and do not use it.
 
@@ -21,15 +25,20 @@ Numbers marked **(BL616)** belong to the Tang Nano 20K's on-board USB link, a BL
 
 The host computes the plant ahead of the bridge and keeps the bridge's **setpoint buffer** near **H** steps. H is **16 ms by default**, and configurable.
 
-- **Why H = 16 ms.** With a Python host and 60 s runs, H = 16 ms held with every CPU busy on two machines; H = 8 ms did not ([Measured link](#measured-link-bl616), F-16).
+- **Why H = 16 ms** ([Measured link](#measured-link-bl616)):
+  - **With a Python host** and 60 s runs, H = 16 ms held with every CPU busy on two machines, and H = 8 ms did not (F-16).
+  - **With the host in C** and exchanges scheduled against the link's cycle (§4.1), a quiet host held H = 12 ms with no underrun.
+  - **With every CPU busy, the C host still needed H = 16 ms:** one underrun in 60 000 steps, against 1.1 % at H = 12. Under that load the scheduler wakes the sender up to about 2 ms late (p99).
+  - A host that knows it is quiet may set H = 12.
+  - **At most one exchange fits in each BL616 cycle of about 6 ms,** so H below about 7 ms cannot hold on that link: 6 setpoints are consumed between two exchanges.
 - **What the fidelity contract declares** ([§7](#7-the-fidelity-contract-version-1)):
   - the plant's lead, H;
-  - the delay from the DUT to the plant: a capture, or a CAN frame from the DUT, reaches the plant at most H plus one round trip after it happened, about 22 ms (BL616).
+  - the delay from the DUT to the plant: a capture, or a CAN frame from the DUT, reaches the plant at most H plus one round trip after it happened. On the BL616 that is about 17 ms with exchanges scheduled against its cycle (round trip p99 about 1.3 ms), and about 22 ms without.
 - **What that delay costs.** It is dead time on the path from the DUT to the plant.
-  - In a diesel, an injection turns into torque within about 4–5 ms: about 1 ms of ignition delay, then combustion up to 30–40° after top dead centre, and at 1500 rpm 1° is 0.11 ms. The plant therefore applies each injection about 17 ms later than an engine would.
+  - In a diesel, an injection turns into torque within about 4–5 ms: about 1 ms of ignition delay, then combustion up to 30–40° after top dead centre, and at 1500 rpm 1° is 0.11 ms. The plant therefore applies each injection about 13 ms later than an engine would with exchanges scheduled against the link's cycle (about 17 ms without).
   - **Mean-speed control is faithful within that dead time:** 6–18° of extra phase lag at 1–3 Hz, which the fidelity contract declares.
   - **Per-cylinder dynamics are not.** A six-cylinder engine at 1500 rpm fires every 13.3 ms, so the torque of one injection lands in the next cylinder's interval.
-  - Only a link with a shorter round trip removes this; the BL616's is about 6 ms (F-14). A host in C may allow a smaller H; not measured yet.
+  - Only a link without the BL616's 6 ms forwarding cycle removes most of it. With that cycle, one exchange every 6 ms sets the floor on H (above).
 - **An underrun is a step that finds the buffer empty.**
   - The bridge **holds the last setpoint it applied** (speed and analog values), so the tooth wheel stays phase-continuous and the DUT sees no step.
   - It counts the underrun and reports the count in every reply.
@@ -212,6 +221,27 @@ T2 and T3 are in the reply, in ticks.
 - **The host keeps a line** (offset and drift) through the samples with the lowest delay in a sliding window. It tracks the drift continuously: −5.6 to −6.1 ppm on the board measured.
 - **One sample is good to about half its round trip.** Back to back that is about 3 ms (BL616). Through the lowest-delay samples, the line is good to p99 45–85 µs (F-15).
 - **The host's clock is `CLOCK_MONOTONIC`.** SocketCAN's kernel timestamps (`SO_TIMESTAMPNS`) are `CLOCK_REALTIME`. They are mapped to `CLOCK_MONOTONIC` first, and that step's own error is measured and added.
+- **A bin with no good sample is left out.** In a sliding window, the host keeps the lowest-delay sample of each bin of host time. A bin whose best delay is far above the window's best (by 500 µs in `hard.h`) only held exchanges that waited a whole forwarding cycle, so it is not used.
+
+### 4.1 Asymmetric links and their forwarding cycle
+
+A link may be asymmetric. **The BL616 is:**
+- a request reaches the bridge almost at once (T2 − T1 spreads over about 30 µs);
+- a reply waits for the BL616's next forwarding instant, on a cycle of about 6 ms (5 999.3 µs on the host's clock, the BL616's own timer).
+
+Two rules follow.
+
+- **The bound published is the symmetric one** (§4, `bus_clock_err_ns`), which holds whatever the link. On an asymmetric link, the symmetric offset is biased by half the difference between the two directions. The bound covers that bias, and is not made smaller by assuming which direction is fast.
+- **To aim setpoints, the host estimates the bridge's tick now from the fast direction.** On the BL616 that is T2 + (now − T1), from the last request. Aiming with the symmetric offset put every request about 3 steps late on the BL616, because the reply's wait biased it by half a cycle.
+
+**Exchanges are scheduled against the forwarding cycle.**
+- The host estimates the cycle from when replies arrive: T4 falls on a grid of period P.
+- It writes each request so that the request's and the reply's bytes are on the wire, and a margin is left, before the next forwarding instant.
+- The default margin is **600 µs**. At 3 Mbaud a byte takes 3.33 µs on the wire.
+- The reply then comes back at that instant: round trip about the lead time, about 1 ms, instead of up to 6 ms, with one exchange per cycle.
+- Two ways to miss an instant:
+  - with less than about 300 µs of margin, every reply misses it and waits a whole cycle;
+  - an idle CPU can wake the sender up late, so the sender sleeps until 300 µs before its send time, then spins, with a timer slack of 1 ns.
 
 ## 5. CAN in a hard run
 
@@ -318,12 +348,40 @@ Good samples came with gaps of up to 16 s.
 
 - **Clock mapping on host B's root port** (M2, `host-b-direct/m2_sync_analysis.txt`): round trip p1 0.54 ms, p50 3.6 ms, p99 6.6 ms. Low-delay samples were rarer than on host A: 6 of 6000 below 300 µs, and 51 (0.9 %) below 500 µs, with a residual p99 of 91 µs. The share of good samples depends on the phase between the host's requests and the BL616's cycle.
 
+**The hard driver in C, on the board** (2026-11-26, [measurements/2026-11-26-hard-driver/](measurements/2026-11-26-hard-driver/)).
+- Setup: the Tang Nano 20K running this repository's gateware (bitstream md5 `6659c249…`), on a root port of host B (20 CPUs). The bridge was reprogrammed before every run.
+- **Where the delay is (sweep):** the round trip is about the time left before the next forwarding instant, plus about 100 µs, when the request leaves at least about 500 µs before it with 67 B on the wire. With less, the round trip is about a whole cycle. Splitting the two directions (T2 − T1 against T4 − T3): the request side spreads over about 30 µs, and the reply side over 0–6 ms.
+- **Scheduled against the cycle (30 s each):**
+
+  | Margin (+ 223 µs on the wire) | Round trip p50 / p99 | Below 1 ms | Samples below 500 µs | Mapping residual p99 |
+  |---|---|---|---|---|
+  | 200 µs | 6.4 / 6.6 ms | 0 % | — | — |
+  | 400 µs | 616 / 811 µs | 99.9 % | 16 % (longest gap 1.3 s) | 49 µs (drift −6.8 ppm) |
+  | 600 µs | 814 µs / 1.01 ms | 99.5 % | 0 % | — |
+  | 900 µs | 1.12 / 1.31 ms | 15 % | 0 % | — |
+
+- **Holding H with 1 ms steps (60 s each, margin 600 µs):** underruns out of about 60 000 steps.
+
+  | H | Quiet host | 20 busy loops |
+  |---|---|---|
+  | 6 ms | 5.1 % | 18 % |
+  | 7 ms | 4 (0.007 %) | 10.8 % |
+  | 8 ms | 28 (0.047 %) | 6.8 % |
+  | 10 ms | 5 (0.008 %) | 3.3 % |
+  | 12 ms | **0** | 1.1 % |
+  | 16 ms | **0** | **1 (0.002 %)** |
+
+  In every run, every reply's applied setpoint was the one sent for its step. On a quiet host, sends left 2–4 µs after their plan (p50; p99 10–21 µs). With every CPU busy, p99 was about 2 ms.
+
 **Throughput, from the first spike** (8 B echo, then paced bulk, 115 200 to 3 000 000 baud): the round trip is about 6 ms at every rate, and 3 375 000 baud does not run. With echo, where both directions run at once, at most about 64 B are in flight per round trip. That is the limit of echo, not of a ping-pong (F-13).
 
 ## Still open (to be measured, not decided)
 
-- **A smaller H with a host in C.** Every number above comes from a Python host.
-- **Regular low-delay samples.** Scheduling each exchange just after the BL616's cycle (F-14) might give them at a steady rate instead of in bursts. Not tried. The hard driver will try it first: on host B's root port only 0.1 % of the samples had a delay below 300 µs.
 - **The error of the REALTIME → MONOTONIC step** for SocketCAN timestamps. Not measured yet.
+- **A lower H with a real-time sender.** Under full CPU load the C host's sends wake up to about 2 ms late. Running the hard driver with a real-time scheduling policy (`SCHED_FIFO`) needs the user's real-time priority limit raised, and is not measured.
+
+Measured and settled since the first version of this page:
+- a smaller H with a host in C: H = 12 ms on a quiet host, still 16 ms under full load;
+- regular low-delay samples, by scheduling exchanges against the cycle (§4.1).
 
 The F-numbers refer to the project's findings log, kept by the maintainers; the evidence for each is in [measurements/2026-11-26-bl616/](measurements/2026-11-26-bl616/).
