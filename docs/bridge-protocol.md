@@ -60,7 +60,9 @@ Every message, in both directions:
 | `0x03` / `0x83` | start / its reply | §3.4 |
 | `0x04` / `0x84` | stop / its reply | §3.4 |
 
-Every reply has the type of its request plus `0x80` and the request's `seq`. A request with a CRC that fails gets a reply of its own type with `error.crc` set and nothing else done; a request of an unknown type gets `error.state`.
+Every reply has the type of its request plus `0x80` and the request's `seq`, with two exceptions:
+- **A request whose CRC fails** gets an exchange reply (`0x81`) with `error.crc` set and the `seq` as received, and nothing is done. Its type cannot be trusted, and only the exchange reply carries every status field. If the `seq` does not match, the host sends the request again after its timeout.
+- **A request of an unknown type** also gets an exchange reply, with `error.state` set.
 
 - **Byte order:** all integers are little-endian and unsigned. There are no floating-point values on the wire.
 - **CRC:** CRC-16/IBM-3740, also called CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no reflection, no final XOR. Its Hamming distance is 4 up to 32 751 bits, so it catches every error of up to three bits in any message this protocol allows (≤ 1 KiB).
@@ -93,7 +95,7 @@ One setpoint, 12 bytes:
 - **A request that repeats the last applied `seq`** is a retransmission (the host did not get the reply). The bridge answers again and applies nothing.
 - **A request with any other gap or overlap** is refused: the bridge applies none of its setpoints and sets `error.sequence`.
 - **A setpoint for a step that has already passed** is dropped and counted in `error.late`.
-- **The bridge applies a request's setpoints only after its CRC checks.** A request whose CRC fails gets a reply with `error.crc` set, and nothing is applied. The host sends it again.
+- **The bridge applies a request's setpoints only after its CRC checks.** A request whose CRC fails gets an exchange reply with `error.crc` set ([§3.1](#31-framing)), and nothing is applied. The host sends it again.
 
 ### 3.3 Reply (bridge → host)
 
