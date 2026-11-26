@@ -21,7 +21,10 @@
  *                            back to back.
  *
  * Every mode prints a summary; --csv writes every exchange
- * (t1_ns,t4_ns,t2_tick,t3_tick,step,fill,underruns,error).
+ * (t1_ns,t4_ns,t2_tick,t3_tick,late_ns,step,fill,underruns,error); late_ns is how
+ * late a scheduled request went out against its planned time. --spin-us S
+ * (default 300) is how long before a planned send the probe stops sleeping
+ * and spins; 0 sleeps all the way.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -42,6 +45,7 @@
 
 typedef struct {
     uint64_t t1, t4, t2, t3;
+    int64_t late;  /**< t1 minus the planned send time, ns (0 when not scheduled) */
     uint32_t step;
     uint16_t fill;
     uint32_t underruns;
@@ -50,6 +54,14 @@ typedef struct {
 
 static Row rows[MAX_SAMPLES];
 static uint32_t baud_ = 3000000u;
+static uint64_t planned_; /* the planned send time of the next exchange, 0 when not scheduled */
+static uint64_t spin_ns_ = 300000u;
+
+/* Waits for a planned send time; the exchange that follows logs how late it went out. */
+static void wait_send(uint64_t at) {
+    (void)otk_hard_wait_until(at, spin_ns_);
+    planned_ = at;
+}
 
 /* Time on the wire of `bytes` at 8N1. */
 static double wire_ns(size_t bytes) {
@@ -93,12 +105,15 @@ static int exchange(const OtkBridgeRequest *q, OtkBridgeReply *d) {
         return -1;
     }
     if (n_rows < MAX_SAMPLES) {
-        rows[n_rows++] = (Row){ r.t1, r.t4, d->t2, d->t3, d->step, d->fill, d->underruns, d->error };
+        rows[n_rows++] = (Row){ r.t1, r.t4, d->t2, d->t3, planned_ ? (int64_t)(r.t1 - planned_) : 0, d->step, d->fill,
+                                d->underruns, d->error };
     }
     if (csv) {
-        fprintf(csv, "%llu,%llu,%llu,%llu,%u,%u,%u,%u\n", (unsigned long long)r.t1, (unsigned long long)r.t4,
-                (unsigned long long)d->t2, (unsigned long long)d->t3, d->step, d->fill, d->underruns, d->error);
+        fprintf(csv, "%llu,%llu,%llu,%llu,%lld,%u,%u,%u,%u\n", (unsigned long long)r.t1, (unsigned long long)r.t4,
+                (unsigned long long)d->t2, (unsigned long long)d->t3, planned_ ? (long long)(r.t1 - planned_) : 0LL,
+                d->step, d->fill, d->underruns, d->error);
     }
+    planned_ = 0;
     return 0;
 }
 
@@ -142,6 +157,20 @@ static void print_rtt(const char *what) {
         below1000 += dl[i] < 1000000u;
     }
     printf("%s: %zu exchanges, %u timeouts\n", what, n_rows, link_.timeouts);
+    {
+        uint64_t *late = malloc(n_rows * sizeof(uint64_t));
+        size_t nl = 0;
+        for (size_t i = 0; i < n_rows; i++) {
+            if (rows[i].late != 0) {
+                late[nl++] = rows[i].late > 0 ? (uint64_t)rows[i].late : 0u;
+            }
+        }
+        if (nl > 0) {
+            printf("  sends late against their plan us: p50 %.1f p99 %.1f max %.1f (spin %llu us)\n", pct(late, nl, 50) / 1e3,
+                   pct(late, nl, 99) / 1e3, pct(late, nl, 100) / 1e3, (unsigned long long)(spin_ns_ / 1000u));
+        }
+        free(late);
+    }
     printf("  round trip us: p1 %.0f p50 %.0f p99 %.0f max %.0f\n", pct(v, n_rows, 1) / 1e3, pct(v, n_rows, 50) / 1e3,
            pct(v, n_rows, 99) / 1e3, pct(v, n_rows, 100) / 1e3);
     printf("  delay (round trip minus the bridge's own time): below 300 us %.1f %%, below 500 us %.1f %%, below 1 ms %.1f %%\n",
@@ -256,7 +285,7 @@ static int mode_sweep(double seconds, double walk_ns) {
         if (at >= until) {
             break;
         }
-        otk_hard_sleep_until(at);
+        wait_send(at);
         if (exchange(&q, &d) < 0) {
             break;
         }
@@ -349,7 +378,7 @@ static int mode_locked(double seconds, double lead_ns) {
     OtkBridgeReply d;
     while (otk_hard_now_ns() < until) {
         const uint64_t at = next_locked_send(&c, lead_ns + wire_ns(request_bytes(0) + REPLY_BYTES), otk_hard_now_ns() + 200000u);
-        otk_hard_sleep_until(at);
+        wait_send(at);
         if (exchange(&q, &d) < 0) {
             break;
         }
@@ -431,7 +460,7 @@ static int mode_hold(double seconds, unsigned h, double lead_ns) {
             const double guess_n = 7.0; /* a cycle of 6 ms consumes about 6 setpoints */
             const uint64_t at = next_locked_send(&c, lead_ns + wire_ns(request_bytes((unsigned)guess_n) + REPLY_BYTES),
                                                  otk_hard_now_ns() + 200000u);
-            otk_hard_sleep_until(at);
+            wait_send(at);
         }
         const uint64_t now = otk_hard_now_ns();
         const double tick_now = (double)last_t2 + (double)(now - last_t1) * (TICK_HZ / 1e9);
@@ -503,6 +532,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--walk-ns") && v) { walk_ns = atof(v); i++; }
         else if (!strcmp(a, "--lead-ns") && v) { lead_ns = atof(v); i++; }
         else if (!strcmp(a, "--H") && v) { h = (unsigned)strtoul(v, NULL, 10); i++; }
+        else if (!strcmp(a, "--spin-us") && v) { spin_ns_ = (uint64_t)strtoull(v, NULL, 10) * 1000u; i++; }
         else if (a[0] != '-' && !mode) { mode = a; }
         else {
             fprintf(stderr, "otk-hard-probe: unknown argument %s\n", a);
@@ -524,7 +554,7 @@ int main(int argc, char **argv) {
             perror(csv_path);
             return 2;
         }
-        fprintf(csv, "t1_ns,t4_ns,t2_tick,t3_tick,step,fill,underruns,error\n");
+        fprintf(csv, "t1_ns,t4_ns,t2_tick,t3_tick,late_ns,step,fill,underruns,error\n");
     }
     const size_t banner = otk_hard_drain(&link_, 300000000u, 3000000000u);
     printf("drained %zu bytes before the first exchange\n", banner);

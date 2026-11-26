@@ -49,6 +49,16 @@ uint64_t otk_hard_now_ns(void);
 void otk_hard_sleep_until(uint64_t t_ns);
 
 /**
+ * @brief Waits until @p t_ns with little lateness: sleeps until @p spin_ns
+ *        before it, then spins. An idle CPU in a deep sleep state can wake up
+ *        hundreds of microseconds late, enough to miss the BL616's
+ *        forwarding instant; the spin covers that. Also sets this thread's
+ *        timer slack to 1 ns (Linux; no privilege needed).
+ * @return how late it returned, ns
+ */
+uint64_t otk_hard_wait_until(uint64_t t_ns, uint64_t spin_ns);
+
+/**
  * @brief Opens a serial device raw, 8N1, no flow control, at @p baud
  *        (one of the standard Linux rates up to 4 Mbaud).
  * @return 0, or -1 with errno set

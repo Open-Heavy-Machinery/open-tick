@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <poll.h>
+#include <sys/prctl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
@@ -31,6 +32,22 @@ void otk_hard_sleep_until(uint64_t t_ns) {
     struct timespec ts = { (time_t)(t_ns / 1000000000u), (long)(t_ns % 1000000000u) };
     while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL) == EINTR) {
     }
+}
+
+uint64_t otk_hard_wait_until(uint64_t t_ns, uint64_t spin_ns) {
+    static bool slack_set = false;
+    if (!slack_set) {
+        (void)prctl(PR_SET_TIMERSLACK, 1UL, 0UL, 0UL, 0UL);
+        slack_set = true;
+    }
+    if (t_ns > spin_ns) {
+        otk_hard_sleep_until(t_ns - spin_ns);
+    }
+    uint64_t now = otk_hard_now_ns();
+    while (now < t_ns) {
+        now = otk_hard_now_ns();
+    }
+    return now - t_ns;
 }
 
 /* ---------------------------------------------------------------- the link */
