@@ -1,0 +1,7 @@
+pingpong_bench hold on /dev/ttyUSB1 at 3000000 baud, 2026-11-26 17:11:38
+host load: 22 busy python3 loops (one per CPU), started before the run
+horizon H 32 steps (1 step = 1 ms), lead 6, at most 30 setpoints (60 B) per request, gap 0.0 ms
+duration 60.0 s, steps 59992, setpoints sent 60024, exchanges lost or bad 0
+underruns 0 (0.000 % of steps)
+FIFO fill at replies: min 26 p1 29 p50 32 max 37
+applied setpoint mismatches 1 (each reply's cur_sp against the counter sent)

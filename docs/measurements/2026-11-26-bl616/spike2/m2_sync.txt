@@ -1,0 +1,6 @@
+pingpong_bench sync on /dev/ttyUSB1 at 3000000 baud, 2026-11-26 17:00:23
+exchanges 6000 (lost or bad 0) over 60.0 s, one every 10.0 ms
+delay (T4-T1)-(T3-T2) us: min 165 p50 3313 p99 6188 max 6431
+error bound of one sample (delay/2) us: best 82, p50 1656
+bridge crystal against host CLOCK_MONOTONIC: -6.9 ppm (lowest-delay 10 % per 2 s window, 600 points)
+offset residual after the drift line, us: lowest-delay points p50 246 p99 494; all points p50 1089 p99 2531

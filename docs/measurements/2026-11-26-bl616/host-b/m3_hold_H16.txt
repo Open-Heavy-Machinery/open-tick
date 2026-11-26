@@ -1,0 +1,6 @@
+pingpong_bench hold on /dev/serial/by-id/usb-SIPEED_USB_Debugger_<serial>-if01-port0 at 3000000 baud, 2026-11-26 20:39:23
+horizon H 16 steps (1 step = 1 ms), lead 6, at most 30 setpoints (60 B) per request, gap 0.0 ms
+duration 60.0 s, steps 59993, setpoints sent 60009, exchanges lost or bad 0
+underruns 0 (0.000 % of steps)
+FIFO fill at replies: min 15 p1 15 p50 16 max 22
+applied setpoint mismatches 1 (each reply's cur_sp against the counter sent)
