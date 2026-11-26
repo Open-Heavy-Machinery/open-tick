@@ -181,6 +181,23 @@ A frame log is every CAN frame of a run, one row each, with two times: `t_s`, th
 
 **Why rows are in the order fates become known.** A delayed frame's bus time is known only when it is delivered. Keeping time order would need the writer to hold rows back; a reader sorts by `t_s` instead.
 
+### 3.12 Bridge protocol codec (`bridge.h`) *(v0.4, in progress)*
+
+The host ↔ bridge protocol, version 1 ([docs/bridge-protocol.md](docs/bridge-protocol.md)), as pure functions in `core/`. It covers:
+- framing with CRC-16/IBM-3740;
+- the payload of every message, encoded and decoded;
+- a stream parser that resynchronises on the sync byte;
+- the conversions from speed to phase increment and from a fraction to an analog value;
+- the extension of a capture's 32-bit tick to 64 bits.
+
+The gateware and the hard driver that will use it are *(planned)*.
+
+**Why both sides in one codec.** The host encodes requests and decodes replies. A bridge simulator, the tests and the vectors for the gateware's testbenches need the other direction, so one codec avoids two descriptions of the same bytes drifting apart.
+
+**Why in `core/`.** It is ISO C with no I/O, clock or allocation, so the same code builds on Linux, macOS and, later, on a bridge with a CPU (the Raspberry Pi Pico).
+
+**Why a failed candidate frame is dropped one byte at a time.** A frame cut short, for example by the BL616's banner after programming (F-18), can swallow the start of the next frame. Dropping only its sync byte lets the parser find a valid frame that starts inside it.
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).
@@ -204,4 +221,10 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
 - **`otk-flywheel` runs as a test.** Two free-running runs must produce identical traces (determinism), and a paced run must complete. With `delay.csv`, the oracle must pass the controller (`example_flywheel_delay_accept`), and two runs must give identical traces.
 - **`test_link`** covers each fault, its filter, delivery order, overflow, the scenario signals, the determinism of the PRNG for a given seed, and what `push_ex` / `pop_ex` report.
 - **`test_framelog`** checks the exact text, every refused row, a write → read round trip of a link in memory (delay exact, each loss, corruption, order) and determinism. `example_flywheel_frames` compares `otk-flywheel --frames` with [examples/flywheel/delay.frames.csv](examples/flywheel/delay.frames.csv) byte for byte. `test_socketcan` checks kernel timestamps and own frames on `vcan`.
-- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 38 behaviours that applications rely on, and the tests must catch each one. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.
+- **`test_bridge`** checks the bridge codec against the specification:
+  - the CRC's check value;
+  - a request byte for byte;
+  - every message both ways, and the budget (446 B for the largest request, 125 B for a reply with 8 captures);
+  - the parser on a banner, a truncated frame, a corrupted frame, sync bytes inside a payload, and one byte at a time;
+  - the units at their limits.
+- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 53 behaviours that applications rely on (45 without a CAN interface), and the tests must catch each one. Six are the bridge codec's. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.

@@ -130,7 +130,7 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - Fidelity contract, version 1: machines declare requirements, the bridge declares guarantees, and the runner checks them before a run.
 - Tang Nano 20K gateware; the toolchain decision (VISION.md, open question 3) is taken here.
 
-**Status:** the host-to-bridge protocol, version 1, is specified, not built ([docs/bridge-protocol.md](docs/bridge-protocol.md)).
+**Status:** the host-to-bridge protocol, version 1, is specified ([docs/bridge-protocol.md](docs/bridge-protocol.md)), and its codec is in `core/` (`opentick/bridge.h`). The gateware, the hard driver and the fidelity contract are not built.
 
 **Exit criteria**
 
