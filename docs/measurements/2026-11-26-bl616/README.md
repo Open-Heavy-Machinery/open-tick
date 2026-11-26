@@ -10,7 +10,7 @@ It is **spike code, not open-tick code.**
 
 - **Board:** Tang Nano 20K (Gowin GW2AR-LV18QN88C8/I7) and its on-board BL616 USB debugger, Sipeed's firmware, which presents itself as an FT2232. Bitstreams were loaded into SRAM only, never into flash.
 - **Link:** the BL616's UART interface (interface 1), 8N1.
-- **Host:** Python 3 with pyserial 3.5, on Linux. Host A has 22 CPUs; host B has 20 CPUs, Ubuntu 22.04, Python 3.10.12.
+- **Host:** Python 3 with pyserial 3.5, on Linux. Host A has 22 CPUs; host B has 20 CPUs, Ubuntu 22.04, Python 3.10.12. On host B the board was first behind a USB 2.0 hub (`host-b-hub/`), then on a root port (`host-b-direct/`, whose `usb.txt` records the path). The link behaved the same on both.
 - **Toolchain:** yosys → nextpnr-himbaechel → gowin_pack from pip (YoWASP), with every file pinned by SHA-256 in [requirements.lock](requirements.lock). openFPGALoader 1.1.1, built from its release tarball (SHA-256 `ca965f933c52a2a9dbb318df4d4de70fac5f095a8e64523f81036ab467a4b567`), only programs the board.
 - **Reproducible bitstream:** `spike2/build.sh 3000000` gave the same bitstream on both hosts, md5 `f1d6afb79fe0b2791d68a22b6c75c2a4`.
 
@@ -20,10 +20,12 @@ It is **spike code, not open-tick code.**
 |---|---|
 | `spike1/link_*.txt` | First spike, host A: UART echo at 115 200 to 3 375 000 baud. 1000 round trips of 8 B, then paced throughput. Its gateware is not kept here; the results are. |
 | `spike2/pingpong.v`, `tb_pingpong.v`, `tang_nano_20k.cst`, `build.sh` | Second spike: a host-initiated ping-pong bridge with a 1 ms setpoint FIFO and a tick counter, its testbench, pins and build. `build.sh` expects the venv at `~/.cache/ohm-fpga/venv`. |
-| `spike2/pingpong_bench.py` | The host side: `sizes` (M1), `sync` (M2), `hold` (M3). |
+| `spike2/pingpong_bench.py` | The host side: `sizes` (M1; `--pairs` for other sizes, such as the large ones), `sync` (M2), `hold` (M3). |
+| `spike2/m2_analysis.py` | M2's clock-mapping analysis from its CSV (thresholds 300, 500 and 1000 µs). It reproduces `spike2/m2_sync_analysis.txt` exactly from the raw CSV. |
 | `spike2/m1_sizes.csv`, `m1_sizes_large.csv` | M1, host A: one row per size (exchanges, losses, round trip min/p50/p99/max, goodput). |
 | `spike2/m2_sync*.txt`, `m3_hold_*.txt`, `m3_mismatch_check.txt` | Host A's reports. |
-| `host-b/m3_hold_*.txt` | M3 repeated on host B. USB serial numbers are masked as `<serial>`. |
+| `host-b-hub/m3_hold_*.txt` | M3 on host B, the board behind a USB 2.0 hub. USB serial numbers are masked as `<serial>`. |
+| `host-b-direct/` | M1, M2 and M3 on host B, the board on a root port, each from a freshly programmed bridge; `usb.txt` is the USB topology at the time. |
 | `raw-csv.md5` | md5 of every raw CSV behind these reports, including the two M1 summaries kept here. The per-exchange CSVs (about 4.7 MB) are kept by the maintainers, not in git. |
 | `requirements.lock` | The pinned toolchain. |
 
@@ -34,7 +36,7 @@ It is **spike code, not open-tick code.**
 | Throughput per exchange (M1) | about 448 B each way in one exchange of about 6 ms; a reply above about 512 B costs about 6 ms more per 512 B | F-13 |
 | Round trip (M2, one exchange every 10 ms) | p1 0.26 ms, p50 3.3 ms, p99 6.2 ms; back to back always about 6 ms; 26 µs inside the bridge | F-14 |
 | Clock mapping (M2) | lowest-delay samples: residual p99 45–85 µs; drift −5.6 to −6.1 ppm | F-15 |
-| Holding a 1 ms setpoint buffer (M3) | H = 16 ms: 0 underruns idle and with every CPU busy, on both hosts; H = 8 ms fails under load | F-16 |
+| Holding a 1 ms setpoint buffer (M3) | H = 16 ms: 0 underruns idle and with every CPU busy, on both hosts and both USB paths; H = 8 ms fails under load | F-16 |
 | Full duplex (first spike) | sustained traffic both ways loses data and can hang the BL616 | F-1 |
 
 The tables are in [bridge-protocol.md](../../bridge-protocol.md#measured-link-bl616).

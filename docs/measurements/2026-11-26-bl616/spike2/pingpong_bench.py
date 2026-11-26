@@ -88,9 +88,14 @@ class Link:
         return r, t1, t4
 
 
+DEFAULT_PAIRS = [(0, 0), (64, 0), (128, 0), (256, 0), (448, 0), (0, 64), (0, 128), (0, 256), (0, 448),
+                 (64, 64), (128, 128), (256, 256), (448, 448)]
+
+
 def cmd_sizes(link, args, out):
-    pairs = [(0, 0), (64, 0), (128, 0), (256, 0), (448, 0), (0, 64), (0, 128), (0, 256), (0, 448),
-             (64, 64), (128, 128), (256, 256), (448, 448)]
+    pairs = DEFAULT_PAIRS
+    if args.pairs:
+        pairs = [tuple(int(x) for x in p.split("/")) for p in args.pairs.split(",")]
     out.write("payload_B,reply_filler_B,n,lost,bad,rtt_min_us,rtt_p50_us,rtt_p99_us,rtt_max_us,goodput_B_per_s\n")
     for n_req, n_rep in pairs:
         rtts, lost, bad = [], 0, 0
@@ -222,6 +227,7 @@ def main():
     ap.add_argument("--dev", default="/dev/ttyUSB1")
     ap.add_argument("--baud", type=int, default=3_000_000)
     ap.add_argument("--n", type=int, default=200, help="sizes: exchanges per size")
+    ap.add_argument("--pairs", default="", help="sizes: REQ/REPLY byte pairs, comma-separated (default: up to 448 B)")
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--period-ms", type=float, default=10.0, help="sync: one exchange every PERIOD ms")
     ap.add_argument("--horizon", type=int, default=16, help="hold: target FIFO fill, steps")

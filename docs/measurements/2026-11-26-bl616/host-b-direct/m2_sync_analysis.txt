@@ -1,0 +1,6 @@
+samples 6000
+round trip T4-T1 us: p1 535 p50 3623 p99 6551
+inside the bridge T3-T2 us (first request byte -> reply queued; request 8 B = 27 us on the line): p1 26 p50 26 p99 26 max 26
+delay < 300 us: 6 samples (0.1 %), longest gap between them 16.33 s; drift -6.73 ppm; |offset - line| us p50 6 p99 9 max 9
+delay < 500 us: 51 samples (0.9 %), longest gap between them 15.67 s; drift -4.61 ppm; |offset - line| us p50 23 p99 91 max 91
+delay < 1000 us: 381 samples (6.3 %), longest gap between them 11.80 s; drift -4.95 ppm; |offset - line| us p50 69 p99 215 max 232

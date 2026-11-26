@@ -1,0 +1,6 @@
+pingpong_bench sync on /dev/serial/by-id/usb-SIPEED_USB_Debugger_<serial>-if01-port0 at 3000000 baud, 2026-11-26 21:07:50
+exchanges 6000 (lost or bad 0) over 60.0 s, one every 10.0 ms
+delay (T4-T1)-(T3-T2) us: min 198 p50 3597 p99 6525 max 8732
+error bound of one sample (delay/2) us: best 99, p50 1799
+bridge crystal against host CLOCK_MONOTONIC: -3.6 ppm (lowest-delay 10 % per 2 s window, 600 points)
+offset residual after the drift line, us: lowest-delay points p50 231 p99 491; all points p50 1125 p99 2587
