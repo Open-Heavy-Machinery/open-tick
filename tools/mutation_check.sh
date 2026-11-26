@@ -239,8 +239,10 @@ mutate "bridge: phase increment truncated, not rounded" $BRG \
 HARD=host/src/hard.c
 mutate "hard: a stale reply (another seq) taken as the answer" $HARD \
     "if (m.seq == l->seq && (m.type & OTK_BRIDGE_REPLY)) {" "if (m.type & OTK_BRIDGE_REPLY) {"
-mutate "hard: T4 from the first piece of a reply, not the last" $HARD \
-    "        l->t_pend = otk_hard_now_ns();" "        if (l->npend == (size_t)n_read) l->t_pend = otk_hard_now_ns();"
+mutate "hard: a retransmission sent with a new seq" $HARD \
+    "    if (!retransmit) {
+        l->seq++;" "    if (true) {
+        l->seq++;"
 mutate "hard: timeouts not counted" $HARD \
     "            l->timeouts++;" "            (void)0;"
 mutate "hard: bins with no good sample kept in the clock mapping" $HARD \

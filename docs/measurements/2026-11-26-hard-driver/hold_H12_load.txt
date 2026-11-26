@@ -1,0 +1,9 @@
+host load: 20 busy python3 loops (one per CPU), started before the run
+drained 0 bytes before the first exchange
+bridge: tick 27000000 Hz, 6 captures, 4 analog outputs of 16 bits
+hold H = 12 steps (1 ms), locked: 60009 steps, underruns 686 (1.143 %), lowest fill at a reply 11, applied setpoint wrong 0 of 8672 checked
+  locked: 600 us of margin plus the request's and reply's time on the wire before each forwarding instant
+hold: 8673 exchanges, 0 timeouts
+  sends late against their plan us: p50 1.6 p99 1813.3 max 4762.5 (spin 300 us)
+  round trip us: p1 713 p50 1760 p99 7763 max 10760
+  delay (round trip minus the bridge's own time): below 300 us 0.3 %, below 500 us 8.9 %, below 1 ms 45.9 %

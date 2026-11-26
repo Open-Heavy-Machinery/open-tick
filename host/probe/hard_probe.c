@@ -55,7 +55,7 @@ typedef struct {
 static Row rows[MAX_SAMPLES];
 static uint32_t baud_ = 3000000u;
 static uint64_t planned_; /* the planned send time of the next exchange, 0 when not scheduled */
-static uint64_t spin_ns_ = 300000u;
+static uint64_t spin_ns_ = OTK_HARD_DEFAULT_SPIN_NS;
 
 /* Waits for a planned send time; the exchange that follows logs how late it went out. */
 static void wait_send(uint64_t at) {
@@ -521,7 +521,7 @@ int main(int argc, char **argv) {
     const char *dev = NULL, *csv_path = NULL, *mode = NULL;
     uint32_t baud = 3000000u;
     double seconds = 10, walk_ns = 37000, lead_ns = -1;
-    unsigned h = 16;
+    unsigned h = OTK_HARD_DEFAULT_H;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         const char *v = (i + 1 < argc) ? argv[i + 1] : NULL;

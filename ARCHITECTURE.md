@@ -219,6 +219,17 @@ The [README](gateware/tang_nano_20k/README.md) lists what it declares, its pins 
 
 The bitstream is reproducible, and CI checks it.
 
+### 3.14 The hard driver's host side (`host/hard.h`) *(v0.4, in progress)*
+
+The serial link to a signal-level bridge, the clock mapping, and the link's forwarding cycle. `otk-hard-probe` (`host/probe/`) measures a bridge with them. Stepping a plant on the bridge's clock, inside open-tick's driver, is the next part *(planned)*.
+
+- **One request, one reply.** `otk_hard_transact()` writes a frame and waits for the reply with the same `seq`. It skips a stale reply and any junk, such as the BL616's banner. T1 is taken just before the write, and T4 when the reply's last byte was read.
+- **The clock mapping** keeps the lowest-delay sample of each bin of host time and fits a line through the last 32 bins. It leaves out a bin with no good sample, and states its bound: the largest residual plus half the smallest delay ([docs/bridge-protocol.md](docs/bridge-protocol.md) §4).
+
+**Why exchanges are scheduled against the link's cycle.** The BL616 holds each reply until its next forwarding instant, every 6 ms. A request written at a random time waits on average half a cycle for its reply. One written just in time, with its and its reply's bytes on the wire and a 600 µs margin, comes back at that instant: about 1 ms instead of up to 6. The cycle is estimated from the replies' arrival times. `otk_hard_wait_until()` sleeps, then spins the last 300 µs with a 1 ns timer slack, because an idle CPU wakes up late.
+
+**Why setpoints are aimed from the request's direction.** The BL616 link is asymmetric: requests arrive at once, replies wait. The symmetric offset of §4 is biased by half the wait, and setpoints aimed with it arrived three steps late. The bridge's tick now is T2 + (now − T1) from the last request. The bound published stays the symmetric one (§4.1).
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).
@@ -249,4 +260,8 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
   - the parser on a banner, a truncated frame, a corrupted frame, sync bytes inside a payload, and one byte at a time;
   - the units at their limits.
 - **The gateware** has its own tests in Icarus Verilog (`gateware/tang_nano_20k/sim/run.sh`, CI job `gateware`): the blocks one by one, and the whole bridge scripted and judged by the codec (`otk-bridge-vectors`). `sim/mutations.sh` breaks 17 of its behaviours, and the simulation must catch each one. The bitstream is built twice and must be identical. `ctest` only runs the script's generator (`bridge_vectors_gen`), because Icarus Verilog is not a dependency of open-tick.
-- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 53 behaviours that applications rely on (45 without a CAN interface), and the tests must catch each one. Six are the bridge codec's. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.
+- **`test_hard`** checks the hard driver without a board:
+  - the cycle estimate on synthetic arrivals with jitter and skipped cycles;
+  - the clock mapping on a known offset and drift, leaving out bins with no good sample;
+  - a whole transaction against a fake bridge on a pseudo-terminal: a banner, a stale reply, a reply in two pieces, a retransmission, a timeout.
+- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 58 behaviours that applications rely on (50 without a CAN interface), and the tests must catch each one. Six are the bridge codec's, five the hard driver's. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.

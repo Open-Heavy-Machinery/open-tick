@@ -1,0 +1,10 @@
+drained 0 bytes before the first exchange
+bridge: tick 27000000 Hz, 6 captures, 4 analog outputs of 16 bits
+locked, 600 us of margin plus 223 us on the wire before each forwarding instant (cycle 5999.288 us):
+locked: 5000 exchanges, 0 timeouts
+  sends late against their plan us: p50 0.9 p99 7.5 max 1327.3 (spin 300 us)
+  round trip us: p1 674 p50 814 p99 1012 max 5517
+  delay (round trip minus the bridge's own time): below 300 us 0.0 %, below 500 us 0.0 %, below 1 ms 99.5 %
+  sync, delay < 300 us: 0 samples, too few
+  sync, delay < 500 us: 0 samples, too few
+  running mapping at the end: bound 384.6 us over its last 32 bins

@@ -1,0 +1,8 @@
+drained 0 bytes before the first exchange
+bridge: tick 27000000 Hz, 6 captures, 4 analog outputs of 16 bits
+cycle (back to back): 1667 exchanges, 0 timeouts
+  round trip us: p1 5797 p50 5993 p99 6185 max 6852
+  delay (round trip minus the bridge's own time): below 300 us 0.0 %, below 500 us 0.0 %, below 1 ms 0.0 %
+  bridge -> host forwarding cycle from the replies' arrival: period 5999.316 us, rms of the arrivals around it 84.9 us
+  sync, delay < 300 us: 0 samples, too few
+  sync, delay < 500 us: 0 samples, too few
