@@ -1,6 +1,6 @@
 # open-tick: vision
 
-> **Status: v0.1 (extraction), v0.2 (oracle), v0.2.1 (verdict files) and v0.3 (transport faults) done; v0.4 (Tang Nano 20K bridge) next, pulled by open-crank v0.4.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
+> **Status: v0.1 (extraction), v0.2 (oracle), v0.2.1 (verdict files), v0.3 (transport faults) and v0.3.1 (frame logs) done; v0.4 (Tang Nano 20K bridge) next, pulled by open-crank v0.4.** This document records the decisions taken so far and the reasons for them, so that the code has something to be checked against. The code that exists is described in [ARCHITECTURE.md](ARCHITECTURE.md). Nothing here is a feature until [ROADMAP.md](ROADMAP.md) says it is done.
 
 ## 1. The idea in one paragraph
 
