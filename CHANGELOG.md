@@ -6,6 +6,8 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- `otk-flywheel --seed <n>`: the seed of the speed link's PRNG, which draws the jitter (default 1, as before, so every existing output is unchanged). [examples/flywheel/jitter.csv](examples/flywheel/jitter.csv) adds 0 to 30 ms of jitter to SPEED for a second. `ctest`: no `--seed` is seed 1, the same seed gives the same frame log, seeds 1 and 2 give different ones, and a seed that is not a whole number is refused. One more mutation ("flywheel: --seed is ignored"; 47 in all).
+
 - `tools/mutation_check.sh`: eight SocketCAN mutations (46 in all): kernel timestamps (`SO_TIMESTAMPNS`, the reported time and its nanoseconds, the anchor), the socket's own frames (`CAN_RAW_RECV_OWN_MSGS`, the `own` flag, the plain receive skipping them) and the bus clock's name. `test_socketcan` kills each one. They run only with a CAN interface; `OTK_MUTATION_NEED_CAN=1` makes a missing one a problem.
 
 ### Changed

@@ -182,6 +182,8 @@ mutate "framelog: a corrupted frame is logged as delivered unchanged" $FRAMELOG 
     "return info->corrupted ? OTK_FRAME_CORRUPT : OTK_FRAME_OK;" "return OTK_FRAME_OK;"
 mutate "flywheel: a delivered frame's bus time is its send time" $FLYWHEEL \
     "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : now," "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : info.pushed,"
+mutate "flywheel: --seed is ignored" $FLYWHEEL \
+    "otk_link_init(&speed_link, OTK_CAN_QUEUE_MAX, link_seed);" "otk_link_init(&speed_link, OTK_CAN_QUEUE_MAX, LINK_SEED_DEFAULT);"
 
 # SocketCAN: kernel timestamps and the socket's own frames (frame logs with
 # bus_clock=kernel). Only test_socketcan can catch these, and it needs a CAN

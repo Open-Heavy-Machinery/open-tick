@@ -4,7 +4,7 @@
  * @brief otk-flywheel: the smallest machine that uses all of open-tick v0.1.
  *
  *     otk-flywheel examples/flywheel/step.csv [--driver free-run|paced] [--trace out.csv] [--quiet]
- *                  [--frames out.frames.csv]
+ *                  [--frames out.frames.csv] [--seed N]
  *                  [--criteria examples/flywheel/step.accept.csv [--verdicts out.verdicts.csv]]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
@@ -25,14 +25,21 @@
  * the machine through a plain queue, with no link name. In memory both times
  * are simulated (bus_clock=sim): t_bus - t_s is exactly the link's delay.
  *
+ * --seed seeds the speed link's PRNG, which draws the jitter
+ * (fault.link.speed.jitter_ms; examples/flywheel/jitter.csv). The default is 1.
+ * The same seed gives the same run, byte for byte; another seed gives other
+ * draws. Without jitter the seed changes nothing.
+ *
  * This is an example, not an application: the plant is a first-order sketch
  * and the message set is made up. It exists to show the pieces together:
  * a signal table, a scenario, the player, CAN queues, a link, a trace and a
  * driver.
  */
 
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <opentick/can.h>
@@ -49,7 +56,7 @@
 #define ID_TARGET 0x101U
 #define ID_DUTY 0x200U
 #define PI 3.14159265358979323846
-#define LINK_SEED 1U /* the speed link's PRNG (jitter): fixed, so runs repeat */
+#define LINK_SEED_DEFAULT 1U /* the speed link's PRNG (jitter); --seed changes it */
 
 /* ---- Signals the scenario can set ---------------------------------------- */
 
@@ -256,7 +263,8 @@ static OtkOracle g_oracle; /* large: keep it off the stack */
 
 static void usage(void) {
     fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n"
-                    "                   [--criteria <criteria.csv> [--verdicts <out.csv>]] [--frames <out.csv>]\n");
+                    "                   [--criteria <criteria.csv> [--verdicts <out.csv>]] [--frames <out.csv>]\n"
+                    "                   [--seed <n>]   seed of the speed link's jitter (default 1)\n");
 }
 
 /* ---- Frame log (--frames) --------------------------------------------------- */
@@ -298,6 +306,7 @@ int main(int argc, char **argv) {
     const char *scenario_path = NULL;
     const char *trace_path = NULL;
     const char *criteria_path = NULL;
+    uint64_t link_seed = LINK_SEED_DEFAULT;
     const char *verdicts_path = NULL;
     const char *frames_path = NULL;
     OtkDriverKind kind = OTK_DRIVER_FREE_RUN;
@@ -311,6 +320,16 @@ int main(int argc, char **argv) {
             frames_path = argv[++i];
         } else if (strcmp(argv[i], "--verdicts") == 0 && i + 1 < argc) {
             verdicts_path = argv[++i];
+        } else if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc) {
+            const char *arg = argv[++i];
+            char *end = NULL;
+            errno = 0;
+            const unsigned long long v = strtoull(arg, &end, 10);
+            if (arg[0] < '0' || arg[0] > '9' || *end != '\0' || errno != 0) {
+                fprintf(stderr, "otk-flywheel: --seed takes a whole number from 0 to 2^64-1, not '%s'\n", arg);
+                return 2;
+            }
+            link_seed = (uint64_t)v;
         } else if (strcmp(argv[i], "--driver") == 0 && i + 1 < argc) {
             if (!otk_driver_from_name(argv[++i], &kind)) {
                 usage();
@@ -381,7 +400,7 @@ int main(int argc, char **argv) {
     static OtkLink speed_link;
     otk_can_queue_init(&to_dut, 16U);
     otk_can_queue_init(&to_machine, 16U);
-    otk_link_init(&speed_link, OTK_CAN_QUEUE_MAX, LINK_SEED);
+    otk_link_init(&speed_link, OTK_CAN_QUEUE_MAX, link_seed);
     static const OtkLinkFilter ONLY_SPEED = { true, false, ID_SPEED, OTK_CAN_SFF_MASK };
     for (int fault = 0; fault < (int)OTK_LINK_FAULT_COUNT; fault++) {
         otk_link_set_filter(&speed_link, (OtkLinkFault)fault, &ONLY_SPEED);

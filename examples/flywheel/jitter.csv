@@ -1,0 +1,10 @@
+# otk-flywheel: spin up, take a load, then the speed link adds a random extra
+# delay of 0 to 30 ms to each SPEED frame (0x100) for a second. The draws come
+# from the link's seeded PRNG: `--seed N` picks them, and the same seed gives
+# the same run, byte for byte.
+time_s,signal,value
+0.0,target_rpm,1500
+1.5,load_nm,0.3
+3.0,fault.link.speed.jitter_ms,30
+4.0,fault.link.speed.jitter_ms,0
+5.0,end,0
