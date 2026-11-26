@@ -27,7 +27,8 @@ It is **spike code, not open-tick code.**
 | `host-b-hub/m3_hold_*.txt` | M3 on host B, the board behind a USB 2.0 hub. USB serial numbers are masked as `<serial>`. |
 | `host-b-direct/` | M1, M2 and M3 on host B, the board on a root port, each from a freshly programmed bridge; `usb.txt` is the USB topology at the time. |
 | `raw-csv.md5` | md5 of every raw CSV behind these reports, including the two M1 summaries kept here. The per-exchange CSVs (about 4.7 MB) are kept by the maintainers, not in git. |
-| `requirements.lock` | The pinned toolchain. |
+| `requirements.lock` | The pinned toolchain as it was for these runs. Today's is [tools/fpga-requirements.lock](../../../tools/fpga-requirements.lock): the same pins and hashes. |
+| `rerun_spike2.sh` | Repeats M1, M2 and M3 on the current machine. Each measurement starts from a freshly programmed bridge, and the USB topology is recorded. The toolchain is installed by [tools/fpga_toolchain.sh](../../../tools/fpga_toolchain.sh). |
 
 ## What was measured, and the result
 
@@ -41,7 +42,11 @@ It is **spike code, not open-tick code.**
 
 The tables are in [bridge-protocol.md](../../bridge-protocol.md#measured-link-bl616).
 
-## Repeating M3
+## Repeating the measurements
+
+`rerun_spike2.sh <outdir> [m1] [m2] [m3]` does all of it. By hand, for M3:
+
+## Repeating M3 by hand
 
 Every run starts from a freshly programmed bridge: the counters of an earlier run would hide underruns (F-17).
 

@@ -39,3 +39,12 @@ if(OTK_HAS_HOST)
     add_test(NAME test_socketcan COMMAND test_socketcan)
     set_tests_properties(test_socketcan PROPERTIES SKIP_RETURN_CODE 77)
 endif()
+
+# The gateware's system testbench takes its script from the codec and is
+# judged by it (gateware/tang_nano_20k/sim/run.sh, which needs iverilog).
+# Here only the generator runs, so the scenario stays buildable and valid C.
+add_executable(otk-bridge-vectors ${PROJECT_SOURCE_DIR}/gateware/tang_nano_20k/sim/bridge_vectors.c)
+target_compile_options(otk-bridge-vectors PRIVATE ${OTK_WARNINGS})
+otk_c11(otk-bridge-vectors)
+target_link_libraries(otk-bridge-vectors PRIVATE opentick_core)
+add_test(NAME bridge_vectors_gen COMMAND otk-bridge-vectors gen ${CMAKE_CURRENT_BINARY_DIR}/bridge_stimulus.txt)

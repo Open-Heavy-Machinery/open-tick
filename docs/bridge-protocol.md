@@ -1,8 +1,10 @@
 # The host ↔ bridge protocol, version 1
 
-**Status: specification; partly built.** This is the contract that open-tick v0.4's hard driver *(planned)* and the Tang Nano 20K gateware *(planned)* will implement, and that every later signal-level bridge (for example the Raspberry Pi Pico) will speak ([ROADMAP.md](../ROADMAP.md), v0.4).
-- **Built:** the codec, in [`core/include/opentick/bridge.h`](../core/include/opentick/bridge.h): framing, CRC, every payload, a parser that resynchronises, and the unit conversions.
-- **Not built yet:** what drives it. The bridge's state machine, the exchanges in time and the clock mapping are not built.
+**Status: specification; partly built.** This is the contract between open-tick's hard driver and every signal-level bridge (the Tang Nano 20K, and later the Raspberry Pi Pico) ([ROADMAP.md](../ROADMAP.md), v0.4).
+- **Built:**
+  - the codec, in [`core/include/opentick/bridge.h`](../core/include/opentick/bridge.h): framing, CRC, every payload, a parser that resynchronises, the unit conversions;
+  - the Tang Nano 20K's gateware, in [`gateware/tang_nano_20k/`](../gateware/tang_nano_20k/README.md), simulated against that codec and not yet run on a board.
+- **Not built yet:** the hard driver, which times the exchanges and maps the clocks *(planned)*, and the fidelity contract's checker *(planned)*.
 
 It carries what crosses the USB link between the host, which runs the core and the plant, and a signal-level bridge, which produces and captures edges and levels on the pins of the device under test (DUT) ([VISION.md §5.2](../VISION.md#52-two-kinds-of-transport)). Message transports such as CAN stay on the host and do not use it.
 
@@ -96,7 +98,8 @@ One setpoint, 12 bytes:
 **The setpoints must continue the buffer:** `first_step` = the last step already queued + 1.
 - **A request that repeats the last applied `seq`** is a retransmission (the host did not get the reply). The bridge answers again and applies nothing.
 - **A request with any other gap or overlap** is refused: the bridge applies none of its setpoints and sets `error.sequence`.
-- **A setpoint for a step that has already passed** is dropped and counted in `error.late`.
+- **A setpoint for a step that has already passed** is dropped and counted in `error.late`. A bridge states how long before its step a setpoint must be queued; the Tang Nano 20K's margin is 2 ticks.
+- **A request whose length does not match its `n`,** or with `n` above 36, is malformed: nothing is applied and the reply sets `error.state`.
 - **The bridge applies a request's setpoints only after its CRC checks.** A request whose CRC fails gets an exchange reply with `error.crc` set ([§3.1](#31-framing)), and nothing is applied. The host sends it again.
 
 ### 3.3 Reply (bridge → host)

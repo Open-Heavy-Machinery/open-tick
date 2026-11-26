@@ -198,6 +198,27 @@ The gateware and the hard driver that will use it are *(planned)*.
 
 **Why a failed candidate frame is dropped one byte at a time.** A frame cut short, for example by the BL616's banner after programming (F-18), can swallow the start of the next frame. Dropping only its sync byte lets the parser find a valid frame that starts inside it.
 
+### 3.13 The Tang Nano 20K bridge (`gateware/tang_nano_20k/`) *(v0.4, in progress)*
+
+Verilog-2005 for the Tang Nano 20K's GW2AR-18. It implements the bridge side of the protocol:
+- framing and CRC;
+- configure, start, stop and exchange, and the five states;
+- a 64-setpoint FIFO in block RAM, the step engine with underruns, late setpoints and the link timeout;
+- the rotary pattern, six captures and four sigma-delta outputs.
+
+The [README](gateware/tang_nano_20k/README.md) lists what it declares, its pins and its resources. It is outside the C zones: nothing in `core/` or `host/` depends on it.
+
+**Why the system testbench is scripted and judged by the codec.** The protocol now has two implementations of the same bytes, C and Verilog. `otk-bridge-vectors gen` writes the testbench's script with the codec, and `otk-bridge-vectors check` judges what the gateware answered with the same codec. A change to either side that the other does not follow fails the simulation.
+
+**Why the head of the setpoint FIFO is fetched two ticks before each step.** The FIFO is block RAM with a registered read. Deciding each step from a value read two ticks earlier, with nothing popped in between, means a setpoint is never applied half-written. The cost is that a setpoint must be queued two ticks (74 ns) before its step.
+
+**Why the toolchain is pinned like the Arm one.** `tools/fpga_toolchain.sh` follows open-crank's `arm_toolchain.sh`:
+- a user cache and no sudo;
+- every file pinned by SHA-256;
+- a venv isolated from the user's Python.
+
+The bitstream is reproducible, and CI checks it.
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).
@@ -227,4 +248,5 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
   - every message both ways, and the budget (446 B for the largest request, 125 B for a reply with 8 captures);
   - the parser on a banner, a truncated frame, a corrupted frame, sync bytes inside a payload, and one byte at a time;
   - the units at their limits.
+- **The gateware** has its own tests in Icarus Verilog (`gateware/tang_nano_20k/sim/run.sh`, CI job `gateware`): the blocks one by one, and the whole bridge scripted and judged by the codec (`otk-bridge-vectors`). `sim/mutations.sh` breaks 17 of its behaviours, and the simulation must catch each one. The bitstream is built twice and must be identical. `ctest` only runs the script's generator (`bridge_vectors_gen`), because Icarus Verilog is not a dependency of open-tick.
 - **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 53 behaviours that applications rely on (45 without a CAN interface), and the tests must catch each one. Six are the bridge codec's. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.
