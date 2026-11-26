@@ -42,6 +42,7 @@
 #define P_GUESS_NS 6000000.0     /* 6 ms: the BL616's bridge -> host cycle, roughly (F-14) */
 #define TIMEOUT_NS 200000000u    /* 200 ms */
 #define MAX_SAMPLES 200000
+#define BINS 24                  /* the sweep's phase bins */
 
 typedef struct {
     uint64_t t1, t4, t2, t3;
@@ -296,7 +297,6 @@ static int mode_sweep(double seconds, double walk_ns) {
         return 1;
     }
     printf("sweep: bridge -> host forwarding cycle %.3f us, replies within %.1f us rms of it\n", p / 1e3, rms / 1e3);
-    enum { BINS = 24 };
     uint64_t *by[BINS];
     size_t nb[BINS] = { 0 };
     for (int b = 0; b < BINS; b++) {
