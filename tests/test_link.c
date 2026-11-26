@@ -318,6 +318,62 @@ static void test_signals(void) {
     CHECK(otk_link_signal(&f, SIG_LINK, SIG_LINK + OTK_LINK_BUS_OFF, 0.0) && !f.bus_off);
 }
 
+/* push_ex / pop_ex: the reason for every loss, corruption and push time. */
+static void test_ex_reports(void) {
+    OtkLinkInfo info;
+    OtkCanFrame f = frame(0x100U, 0U, 8U, 1U), out;
+
+    reset(2U);
+    CHECK(otk_link_push_ex(&g_link, &f, MS(10), &info));
+    CHECK(info.lost == OTK_LINK_LOST_NONE && !info.corrupted && info.pushed == MS(10) && info.due == MS(10));
+    CHECK(otk_link_pop_ex(&g_link, MS(10), &out, &info));
+    CHECK(info.lost == OTK_LINK_LOST_NONE && info.pushed == MS(10) && memcmp(out.data, f.data, 8U) == 0);
+
+    OtkLinkFaults fl;
+    memset(&fl, 0, sizeof(fl));
+    fl.delay = MS(300);
+    fl.corrupt = 2U;
+    set(&fl);
+    CHECK(otk_link_push_ex(&g_link, &f, MS(20), &info));
+    CHECK(info.corrupted && info.pushed == MS(20) && info.due == MS(320));
+    CHECK(!otk_link_pop_ex(&g_link, MS(310), &out, &info));
+    CHECK(otk_link_pop_ex(&g_link, MS(320), &out, &info));
+    CHECK(info.lost == OTK_LINK_LOST_NONE && info.corrupted && info.pushed == MS(20) && info.due == MS(320));
+    CHECK(out.data[1] == (uint8_t)(f.data[1] ^ 0xFFU));
+
+    memset(&fl, 0, sizeof(fl));
+    fl.drop = true;
+    set(&fl);
+    CHECK(!otk_link_push_ex(&g_link, &f, MS(30), &info));
+    CHECK(info.lost == OTK_LINK_LOST_DROP && info.pushed == MS(30));
+    fl.drop = false;
+    fl.drop_one_in = 1U;
+    set(&fl);
+    CHECK(!otk_link_push_ex(&g_link, &f, MS(40), &info) && info.lost == OTK_LINK_LOST_DROP_ONE_IN);
+    fl.drop_one_in = 0U;
+    fl.bus_off = true;
+    set(&fl);
+    CHECK(!otk_link_push_ex(&g_link, &f, MS(50), &info) && info.lost == OTK_LINK_LOST_BUS_OFF);
+
+    /* overflow: capacity 2 */
+    memset(&fl, 0, sizeof(fl));
+    fl.delay = MS(100);
+    set(&fl);
+    CHECK(otk_link_push_ex(&g_link, &f, MS(60), NULL));
+    CHECK(otk_link_push_ex(&g_link, &f, MS(60), NULL));
+    CHECK(!otk_link_push_ex(&g_link, &f, MS(60), &info) && info.lost == OTK_LINK_LOST_OVERFLOW);
+    CHECK(g_link.overflows == 1U);
+
+    /* bus_off when due: pop_ex returns the frame as lost; pop returns nothing */
+    fl.bus_off = true;
+    set(&fl);
+    CHECK(otk_link_pop_ex(&g_link, MS(160), &out, &info));
+    CHECK(info.lost == OTK_LINK_LOST_BUS_OFF && info.pushed == MS(60));
+    const uint32_t lost_before = g_link.bus_off_lost;
+    CHECK(!otk_link_pop(&g_link, MS(160), &out));
+    CHECK(g_link.bus_off_lost == lost_before + 1U && otk_link_count(&g_link) == 0U);
+}
+
 int main(void) {
     RUN_TEST(test_transparent);
     RUN_TEST(test_drop_and_filter);
@@ -329,5 +385,6 @@ int main(void) {
     RUN_TEST(test_bus_off);
     RUN_TEST(test_overflow);
     RUN_TEST(test_signals);
+    RUN_TEST(test_ex_reports);
     return check_report();
 }

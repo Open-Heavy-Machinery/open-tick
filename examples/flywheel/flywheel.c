@@ -4,6 +4,7 @@
  * @brief otk-flywheel: the smallest machine that uses all of open-tick v0.1.
  *
  *     otk-flywheel examples/flywheel/step.csv [--driver free-run|paced] [--trace out.csv] [--quiet]
+ *                  [--frames out.frames.csv]
  *                  [--criteria examples/flywheel/step.accept.csv [--verdicts out.verdicts.csv]]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
@@ -19,6 +20,11 @@
  * with the signals fault.link.speed.* (examples/flywheel/delay.csv); with no
  * fault set the link is transparent.
  *
+ * --frames writes every frame of the run (docs/frame-log-format.md): SPEED and
+ * TARGET through the speed link, with what it did to each; DUTY, which reaches
+ * the machine through a plain queue, with no link name. In memory both times
+ * are simulated (bus_clock=sim): t_bus - t_s is exactly the link's delay.
+ *
  * This is an example, not an application: the plant is a first-order sketch
  * and the message set is made up. It exists to show the pieces together:
  * a signal table, a scenario, the player, CAN queues, a link, a trace and a
@@ -30,6 +36,7 @@
 #include <string.h>
 
 #include <opentick/can.h>
+#include <opentick/framelog.h>
 #include <opentick/host/driver.h>
 #include <opentick/link.h>
 #include <opentick/oracle.h>
@@ -249,7 +256,42 @@ static OtkOracle g_oracle; /* large: keep it off the stack */
 
 static void usage(void) {
     fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n"
-                    "                   [--criteria <criteria.csv> [--verdicts <out.csv>]]\n");
+                    "                   [--criteria <criteria.csv> [--verdicts <out.csv>]] [--frames <out.csv>]\n");
+}
+
+/* ---- Frame log (--frames) --------------------------------------------------- */
+
+static OtkFrameLog g_frames;
+static FILE *g_frames_fp = NULL;
+
+static void log_frame(OtkNs t, OtkNs t_bus, OtkFrameDir dir, const char *link, const OtkCanFrame *f,
+                      OtkFrameFault fault) {
+    if (g_frames_fp != NULL) {
+        const OtkFrameRow row = { t, t_bus, dir, link, f, fault };
+        (void)otk_framelog_frame(&g_frames, &row); /* an error is sticky and reported at the end */
+    }
+}
+
+/* The machine sends at t: a frame the link loses never reaches the bus. */
+static void send_to_dut(OtkLink *link, const OtkCanFrame *f, OtkNs t) {
+    OtkLinkInfo info;
+    if (!otk_link_push_ex(link, f, t, &info)) {
+        log_frame(t, OTK_FRAMELOG_NO_TIME, OTK_FRAME_TO_DUT, "speed", f, otk_frame_fault_from_link(&info));
+    }
+}
+
+/* What the link delivers to the DUT at now; false when nothing more is due. */
+static bool deliver_to_dut(OtkLink *link, OtkNs now, OtkCanFrame *out) {
+    OtkLinkInfo info;
+    while (otk_link_pop_ex(link, now, out, &info)) {
+        const bool lost = info.lost != OTK_LINK_LOST_NONE;
+        log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : now, OTK_FRAME_TO_DUT, "speed", out,
+                  otk_frame_fault_from_link(&info));
+        if (!lost) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int main(int argc, char **argv) {
@@ -257,6 +299,7 @@ int main(int argc, char **argv) {
     const char *trace_path = NULL;
     const char *criteria_path = NULL;
     const char *verdicts_path = NULL;
+    const char *frames_path = NULL;
     OtkDriverKind kind = OTK_DRIVER_FREE_RUN;
     int quiet = 0;
     for (int i = 1; i < argc; i++) {
@@ -264,6 +307,8 @@ int main(int argc, char **argv) {
             trace_path = argv[++i];
         } else if (strcmp(argv[i], "--criteria") == 0 && i + 1 < argc) {
             criteria_path = argv[++i];
+        } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            frames_path = argv[++i];
         } else if (strcmp(argv[i], "--verdicts") == 0 && i + 1 < argc) {
             verdicts_path = argv[++i];
         } else if (strcmp(argv[i], "--driver") == 0 && i + 1 < argc) {
@@ -311,6 +356,16 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (frames_path != NULL) {
+        /* In memory, both times are the simulation's: exact, so the error is 0. */
+        const OtkFrameLogConfig cfg = { otk_ns_from_ms(STEP_MS), OTK_BUS_CLOCK_SIM, true, 0U, "otk-flywheel" };
+        g_frames_fp = fopen(frames_path, "w");
+        if (g_frames_fp == NULL || !otk_framelog_init(&g_frames, g_frames_fp, &cfg)) {
+            perror("otk-flywheel: cannot write the frame log");
+            return 1;
+        }
+    }
+
     Machine m;
     Dut d;
     memset(&m, 0, sizeof(m));
@@ -339,9 +394,13 @@ int main(int argc, char **argv) {
                otk_ns_to_s(g_scenario.end));
     }
 
+    uint64_t dut_sent_ms = 0U; /* when the DUT sent what is in to_machine */
     while (!otk_player_done(&player, otk_ns_from_ms(m.t_ms))) {
         otk_player_advance(&player, otk_ns_from_ms(m.t_ms));
         for (size_t i = 0; i < otk_can_queue_count(&to_machine); i++) {
+            /* sent by the DUT in the last step, at the same simulated time */
+            log_frame(otk_ns_from_ms(m.t_ms), otk_ns_from_ms(dut_sent_ms), OTK_FRAME_FROM_DUT, NULL,
+                      otk_can_queue_at(&to_machine, i), OTK_FRAME_OK);
             machine_rx(&m, otk_can_queue_at(&to_machine, i));
             if (criteria_path != NULL) {
                 otk_oracle_frame(&g_oracle, otk_can_queue_at(&to_machine, i), otk_ns_from_ms(m.t_ms));
@@ -356,14 +415,15 @@ int main(int argc, char **argv) {
 
         otk_link_set_faults(&speed_link, &m.speed_link);
         for (size_t i = 0; i < otk_can_queue_count(&to_dut); i++) {
-            (void)otk_link_push(&speed_link, otk_can_queue_at(&to_dut, i), otk_ns_from_ms(m.t_ms));
+            send_to_dut(&speed_link, otk_can_queue_at(&to_dut, i), otk_ns_from_ms(m.t_ms));
         }
         otk_can_queue_clear(&to_dut);
         OtkCanFrame rx;
-        while (otk_link_pop(&speed_link, otk_ns_from_ms(m.t_ms), &rx)) {
+        while (deliver_to_dut(&speed_link, otk_ns_from_ms(m.t_ms), &rx)) {
             dut_rx(&d, &rx, m.t_ms);
         }
         dut_step(&d, m.t_ms, &to_machine);
+        dut_sent_ms = m.t_ms;
 
         if (trace_fp != NULL) {
             trace_row(&trace, &m, &d);
@@ -390,6 +450,15 @@ int main(int argc, char **argv) {
             fprintf(stderr, "otk-flywheel: trace: %s\n", otk_trace_error(&trace));
         }
         if (fclose(trace_fp) != 0 || !trace_ok) {
+            return 1;
+        }
+    }
+    if (g_frames_fp != NULL) {
+        const int frames_ok = otk_framelog_ok(&g_frames);
+        if (!frames_ok) {
+            fprintf(stderr, "otk-flywheel: frame log: %s\n", otk_framelog_error(&g_frames));
+        }
+        if (fclose(g_frames_fp) != 0 || !frames_ok) {
             return 1;
         }
     }

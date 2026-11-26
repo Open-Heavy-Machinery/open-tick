@@ -75,6 +75,8 @@ TRACE=core/src/trace.c
 PACER=host/src/pacer.c
 ORACLE=core/src/oracle.c
 LINK=core/src/link.c
+FRAMELOG=core/src/framelog.c
+FLYWHEEL=examples/flywheel/flywheel.c
 
 mutate "signals: duplicate names accepted" $SIG \
     "if (strcmp(name, t->names[j]) == 0) {" "if (false) {"
@@ -134,13 +136,42 @@ mutate "link: corrupt flips the last byte, not byte N" $LINK \
 mutate "link: bus_off lets pushed frames through" $LINK \
     "if (fl->bus_off) {
         link->bus_off_lost++;
-        return false;" "if (false) {
+        return lost_at_push(info, OTK_LINK_LOST_BUS_OFF, t);" "if (false) {
         link->bus_off_lost++;
-        return false;"
+        return lost_at_push(info, OTK_LINK_LOST_BUS_OFF, t);"
 mutate "link: a frame may overtake an earlier one with the same id" $LINK \
     "if (same_id(&link->line[i].frame, frame) && link->line[i].due > due) {" "if (false) {"
 mutate "link: an id filter matches every frame" $LINK \
     "return extended == flt->extended && ((f->id ^ flt->id) & flt->mask) == 0U;" "return true;"
+
+# What a link reports for a frame log (push_ex / pop_ex).
+mutate "link: a drop is reported as drop_one_in" $LINK \
+    "return lost_at_push(info, OTK_LINK_LOST_DROP, t);" "return lost_at_push(info, OTK_LINK_LOST_DROP_ONE_IN, t);"
+mutate "link: a corrupted frame is not reported" $LINK \
+    "s->corrupted = true;" ";"
+mutate "link: the push time is not kept" $LINK \
+    "s->pushed = t;" "s->pushed = 0U;"
+mutate "link: pop_ex hides a bus_off loss at delivery" $LINK \
+    "info->lost = lost ? OTK_LINK_LOST_BUS_OFF : OTK_LINK_LOST_NONE;" "info->lost = OTK_LINK_LOST_NONE;"
+
+# Frame log writer (docs/frame-log-format.md).
+mutate "framelog: times with six decimals, not nine" $FRAMELOG \
+    'return fprintf(fp, "%llu.%09llu",' 'return fprintf(fp, "%llu.%06llu",'
+mutate "framelog: an 11-bit id printed with 8 digits" $FRAMELOG \
+    "ext ? 8 : 3" "8"
+mutate "framelog: a t off the step grid is accepted" $FRAMELOG \
+    "if (row->t % log->step != 0U) {" "if (false) {"
+mutate "framelog: a lost to_dut frame may carry a bus time" $FRAMELOG \
+    "if (row->dir == OTK_FRAME_TO_DUT && is_lost(row->fault) && row->t_bus != OTK_FRAMELOG_NO_TIME) {" "if (false) {"
+mutate "framelog: errors are not sticky" $FRAMELOG \
+    "    if (log->error) {
+        return false;
+    }
+    const OtkCanFrame *f = row->frame;" "    const OtkCanFrame *f = row->frame;"
+mutate "framelog: a corrupted frame is logged as delivered unchanged" $FRAMELOG \
+    "return info->corrupted ? OTK_FRAME_CORRUPT : OTK_FRAME_OK;" "return OTK_FRAME_OK;"
+mutate "flywheel: a delivered frame's bus time is its send time" $FLYWHEEL \
+    "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : now," "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : info.pushed,"
 
 echo
 echo "$killed mutations killed, $problems problems"

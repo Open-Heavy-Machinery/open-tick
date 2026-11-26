@@ -131,6 +131,8 @@ This is a non-blocking raw socket for classic CAN and CAN FD. Its behaviour:
 
 **Why deliver 11-bit frames.** open-crank's glue dropped them because J1939 uses 29-bit identifiers only. That filter belongs to J1939, so it moved to open-crank's conversion function (`oc_frame_from_otk`). CANopen, for example, needs 11-bit frames.
 
+**Timestamps** *(v0.3.1)*. `otk_socketcan_enable_timestamps()` turns on the kernel's receive timestamps (`SO_TIMESTAMPNS`) and, optionally, the socket's own sent frames back (`CAN_RAW_RECV_OWN_MSGS`, flagged `MSG_CONFIRM`), stamped when they left on the interface. `otk_socketcan_recv_ex()` returns them; `otk_socketcan_recv()` skips the socket's own frames, so code that does not ask sees what it saw before. **Why the own-frame copy for sent frames:** it gives a sent frame a kernel time on the same clock as a received one, so a frame log names one clock for the whole file.
+
 ### 3.9 Oracle (`oracle.h`)
 
 The acceptance oracle grades a run from the frames a device under test (DUT) sends, against criteria written as data. It moved here in v0.2.0 from open-crank v0.2.1 (`sim/oracle/`), where it was proven on seven scenarios over `vcan` and on a board. The criteria format is a contract: [docs/criteria-format.md](docs/criteria-format.md).
@@ -165,6 +167,20 @@ A link is one direction of a CAN path. The sender pushes each frame with the tim
 
 **What it does not do.** It does not simulate a real bus-off, error frames, arbitration or bus load. A link is not a bus model.
 
+**What happened to each frame** *(v0.3.1)*. `otk_link_push_ex()` and `otk_link_pop_ex()` report why a frame was lost (drop, drop one in N, bus-off, overflow), whether it was corrupted, and when it was pushed. `pop_ex` also returns the frames that bus-off loses when they fall due, which `otk_link_pop()` drops without a word. `otk_link_push()` and `otk_link_pop()` are these with the report thrown away, so their behaviour is unchanged (`test_link` is untouched, and open-crank's bench uses them).
+
+### 3.11 Frame logs (`framelog.h`) *(v0.3.1)*
+
+A frame log is every CAN frame of a run, one row each, with two times: `t_s`, the step in which it crossed the machine's side, and `t_bus_s`, when it was on the device under test's side, measured by a clock that the file names. The contract is [docs/frame-log-format.md](docs/frame-log-format.md).
+
+**Why the application writes it, not the links.** Links are queues that the application places where its faults belong, and not every frame passes through one: open-crank's links sit inside its simulated bench, and its operator panel's frames bypass them. Only the application knows its bus boundary, which way a frame goes and which link carried it. open-tick gives the writer and the links' reports.
+
+**Why two times, and why `t_s` governs.** The step time is deterministic and is the axis of the trace and the verdicts, so a frame placed by it lines up with both exactly. The bus time is a measurement that depends on the clock: exact in memory, the kernel's on SocketCAN, a bridge's oscillator in v0.4's hard mode, where the host's clock can only be mapped onto the bridge's with an error that the file must state (`bus_clock_err_ns`).
+
+**Why times are printed from integers.** Nine decimals from a `double` would round; the writer prints seconds and nanoseconds from the integer, so `t_bus_s − t_s` of a 300 ms delay reads as exactly 0.300000000.
+
+**Why rows are in the order fates become known.** A delayed frame's bus time is known only when it is delivered. Keeping time order would need the writer to hold rows back; a reader sorts by `t_s` instead.
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).
@@ -186,5 +202,6 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
 - **Wall-clock tests check only bounds that hold on a loaded machine.** A paced loop can never finish early; there is no upper bound to make them flaky.
 - **`test_socketcan` needs a CAN interface** and reports itself skipped, not passed, without one. CI sets up `vcan0` with a CAN FD MTU when the runner allows it, and warns when it cannot.
 - **`otk-flywheel` runs as a test.** Two free-running runs must produce identical traces (determinism), and a paced run must complete. With `delay.csv`, the oracle must pass the controller (`example_flywheel_delay_accept`), and two runs must give identical traces.
-- **`test_link`** covers each fault, its filter, delivery order, overflow, the scenario signals, and the determinism of the PRNG for a given seed.
-- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 27 behaviours that applications rely on, and the tests must catch each one. Eight of them are the links': one per fault, plus the order rule and the filter.
+- **`test_link`** covers each fault, its filter, delivery order, overflow, the scenario signals, the determinism of the PRNG for a given seed, and what `push_ex` / `pop_ex` report.
+- **`test_framelog`** checks the exact text, every refused row, a write → read round trip of a link in memory (delay exact, each loss, corruption, order) and determinism. `example_flywheel_frames` compares `otk-flywheel --frames` with [examples/flywheel/delay.frames.csv](examples/flywheel/delay.frames.csv) byte for byte. `test_socketcan` checks kernel timestamps and own frames on `vcan`.
+- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 38 behaviours that applications rely on, and the tests must catch each one. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.

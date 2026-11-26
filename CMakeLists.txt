@@ -41,6 +41,7 @@ add_library(opentick_core STATIC
     core/src/trace.c
     core/src/oracle.c
     core/src/link.c
+    core/src/framelog.c
 )
 add_library(opentick::core ALIAS opentick_core)
 target_include_directories(opentick_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core/include)
