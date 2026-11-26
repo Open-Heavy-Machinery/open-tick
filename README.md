@@ -79,7 +79,7 @@ open-tick/
 ## Checks
 
 - `tools/check_deps.sh`: `core/` uses ISO C only, and nothing includes an application.
-- `tools/mutation_check.sh`: breaks 38 behaviours on purpose and requires the tests to notice each one.
+- `tools/mutation_check.sh`: breaks 46 behaviours on purpose and requires the tests to notice each one. Eight of them are in the SocketCAN bridge's timestamps and own frames, and need a CAN interface (`vcan0`, or a private one with `unshare -rn`; see the script's header); CI gives them one.
 
 CI runs both, plus gcc and clang in Debug and Release with warnings as errors, a sanitizer build, a core-only build on macOS, and the SocketCAN bridge on `vcan` when the runner allows it.
 

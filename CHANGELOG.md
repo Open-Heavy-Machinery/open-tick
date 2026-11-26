@@ -2,6 +2,16 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
+## [Unreleased]
+
+### Added
+
+- `tools/mutation_check.sh`: eight SocketCAN mutations (46 in all): kernel timestamps (`SO_TIMESTAMPNS`, the reported time and its nanoseconds, the anchor), the socket's own frames (`CAN_RAW_RECV_OWN_MSGS`, the `own` flag, the plain receive skipping them) and the bus clock's name. `test_socketcan` kills each one. They run only with a CAN interface; `OTK_MUTATION_NEED_CAN=1` makes a missing one a problem.
+
+### Changed
+
+- CI: the mutation job sets up `vcan0` and runs with `OTK_MUTATION_NEED_CAN=1`, so the SocketCAN mutations always run there.
+
 ## [0.3.1] (2026-11-26): frame logs
 
 ### Added

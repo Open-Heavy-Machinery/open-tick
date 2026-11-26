@@ -13,6 +13,15 @@
 # The paced example (5 s of wall clock) is left out of every run here; the
 # pacer's own tests cover it.
 #
+# The SocketCAN mutations (kernel timestamps, own frames) need a CAN
+# interface for test_socketcan: vcan0, or the one OTK_TEST_CAN_IF names.
+# Without one they are skipped with a note, unless OTK_MUTATION_NEED_CAN=1
+# (CI), which makes a missing interface a problem. Without root, a private
+# vcan0 in a user namespace works too:
+#
+#     unshare -rn sh -c 'ip link add dev vcan0 type vcan && ip link set vcan0 mtu 72 &&
+#                        ip link set up vcan0 && exec tools/mutation_check.sh'
+#
 # Usage: tools/mutation_check.sh   (needs cmake, a C compiler, python3)
 set -euo pipefail
 
@@ -77,6 +86,7 @@ ORACLE=core/src/oracle.c
 LINK=core/src/link.c
 FRAMELOG=core/src/framelog.c
 FLYWHEEL=examples/flywheel/flywheel.c
+SOCKETCAN=host/src/socketcan.c
 
 mutate "signals: duplicate names accepted" $SIG \
     "if (strcmp(name, t->names[j]) == 0) {" "if (false) {"
@@ -172,6 +182,39 @@ mutate "framelog: a corrupted frame is logged as delivered unchanged" $FRAMELOG 
     "return info->corrupted ? OTK_FRAME_CORRUPT : OTK_FRAME_OK;" "return OTK_FRAME_OK;"
 mutate "flywheel: a delivered frame's bus time is its send time" $FLYWHEEL \
     "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : now," "log_frame(info.pushed, lost ? OTK_FRAMELOG_NO_TIME : info.pushed,"
+
+# SocketCAN: kernel timestamps and the socket's own frames (frame logs with
+# bus_clock=kernel). Only test_socketcan can catch these, and it needs a CAN
+# interface: it exits 77 (skipped) without one.
+can_rc=0
+"$WORK/build/tests/test_socketcan" >/dev/null 2>&1 || can_rc=$?
+if [[ $can_rc -eq 0 ]]; then
+    mutate "socketcan: SO_TIMESTAMPNS never enabled" $SOCKETCAN \
+        "if (setsockopt(s->fd, SOL_SOCKET, SO_TIMESTAMPNS, &on, sizeof(on)) < 0) {
+        return false;
+    }" "(void)on;"
+    mutate "socketcan: CAN_RAW_RECV_OWN_MSGS never set" $SOCKETCAN \
+        "if (own_msgs && setsockopt(" "if (false && setsockopt("
+    mutate "socketcan: bus_clock says host with kernel timestamps" $SOCKETCAN \
+        "return s->timestamps ? OTK_BUS_CLOCK_KERNEL : OTK_BUS_CLOCK_HOST;" "return OTK_BUS_CLOCK_HOST;"
+    mutate "socketcan: an own frame is not marked as own" $SOCKETCAN \
+        "info->own = (msg.msg_flags & MSG_CONFIRM) != 0;" "info->own = false;"
+    mutate "socketcan: a timestamp is received but not reported" $SOCKETCAN \
+        "info->has_time = true;" ";"
+    mutate "socketcan: the timestamp loses its nanoseconds" $SOCKETCAN \
+        "info->time_ns = (uint64_t)ts.tv_sec * OTK_NS_PER_S + (uint64_t)ts.tv_nsec;" \
+        "info->time_ns = (uint64_t)ts.tv_sec * OTK_NS_PER_S;"
+    mutate "socketcan: a time before the anchor wraps around" $SOCKETCAN \
+        "return (time_ns < anchor_ns) ? OTK_FRAMELOG_NO_TIME : (OtkNs)(time_ns - anchor_ns);" \
+        "return (OtkNs)(time_ns - anchor_ns);"
+    mutate "socketcan: the plain receive hands back the socket's own frames" $SOCKETCAN \
+        "if (r != 1 || !info.own) {" "if (true) {"
+elif [[ ${OTK_MUTATION_NEED_CAN:-0} == 1 ]]; then
+    echo "NO CAN    socketcan mutations not run: test_socketcan exited $can_rc (no CAN interface?)"
+    problems=$((problems + 1))
+else
+    echo "note      socketcan mutations skipped: no CAN interface (test_socketcan exited $can_rc)"
+fi
 
 echo
 echo "$killed mutations killed, $problems problems"
