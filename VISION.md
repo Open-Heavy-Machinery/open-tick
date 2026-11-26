@@ -191,9 +191,12 @@ Honest non-goals. Revisit them; do not quietly break them.
 
 ## 8. Open questions
 
-1. **Host-to-bridge link and protocol.** USB CDC on the Pico; on the Tang Nano 20K, its on-board USB-UART or an external USB chip. Measure throughput and latency first, before anything depends on them, as open-crank v0.2 does with its USB-CAN adapter.
+1. **Host-to-bridge link and protocol.** USB CDC on the Pico; on the Tang Nano 20K, its on-board USB-UART or an external USB chip. Measure throughput and latency first, before anything depends on them, as open-crank v0.2 does with its USB-CAN adapter. *Decided in v0.4 for the Tang Nano 20K:* the on-board USB-UART (the BL616), host-initiated ping-pong, measured first ([docs/bridge-protocol.md](docs/bridge-protocol.md), "Measured link"). An external USB chip stays the way to a shorter round trip.
 2. **Timebase width.** *Decided in v0.1:* `uint64_t` nanoseconds in the core, with the bridge's clock mapped onto it ([ARCHITECTURE.md](ARCHITECTURE.md), §3.1).
-3. **Tang Nano 20K toolchain.** Is the open toolchain (Yosys, nextpnr, Apicula) mature enough for the GW2AR-18, or does the gateware need Gowin's IDE? This decides whether the project can promise an all-open build.
+3. **Tang Nano 20K toolchain.** Is the open toolchain (Yosys, nextpnr, Apicula) mature enough for the GW2AR-18, or does the gateware need Gowin's IDE? This decides whether the project can promise an all-open build. *Decided in v0.4:* the open toolchain.
+   - It is yosys, nextpnr-himbaechel and Apycula from pip (YoWASP), pinned by SHA-256 ([tools/fpga_toolchain.sh](tools/fpga_toolchain.sh)).
+   - It builds the bridge with block RAM and multipliers at about 76 MHz, against the 27 MHz needed.
+   - The same sources give the same bitstream on different PCs.
 4. **Where device models live.** IMU register maps and motor-driver behaviour: in open-tick as a shared library, or in each application?
 5. **Repository and build mechanics.** How applications consume open-tick (CMake `FetchContent`, a submodule, an installed package), and how CI checks the one-way dependency across repositories. v0.1 builds as a subproject either way; the choice for open-crank is laid out in [docs/open-crank-integration.md](docs/open-crank-integration.md).
 6. **Language bindings.** C11 core as in open-crank; Python bindings for scripting scenarios stay in the backlog until someone needs them.

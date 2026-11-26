@@ -1,0 +1,49 @@
+// open-tick Tang Nano 20K bridge: pins.
+// Clock, UART and LEDs: Sipeed's board documentation (27 MHz on 4; the BL616
+// UART on 69 = FPGA TX, 70 = FPGA RX; LEDs 15-20, low = on). Signal pins: the
+// header pins with no on-board function (bank voltage 3.3 V on every header
+// bank, Sipeed's pin map), as proposed for wiring to a NUCLEO-G431KB
+// (ohm-workspace decisions, 2026-11-26; not final until the wiring is decided).
+IO_LOC "clk" 4;
+IO_PORT "clk" IO_TYPE=LVCMOS33;
+IO_LOC "uart_tx" 69;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33;
+IO_LOC "uart_rx" 70;
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "crank" 73;
+IO_PORT "crank" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "cam" 74;
+IO_PORT "cam" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "analog[0]" 76;
+IO_LOC "analog[1]" 86;
+IO_LOC "analog[2]" 72;
+IO_LOC "analog[3]" 71;
+IO_PORT "analog[0]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_PORT "analog[1]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_PORT "analog[2]" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_PORT "analog[3]" IO_TYPE=LVCMOS33 DRIVE=8;
+// Injector inputs: pulled down, so a DUT in reset (floating pins) reads as no injection.
+IO_LOC "inj[0]" 27;
+IO_LOC "inj[1]" 28;
+IO_LOC "inj[2]" 25;
+IO_LOC "inj[3]" 26;
+IO_LOC "inj[4]" 29;
+IO_LOC "inj[5]" 30;
+IO_PORT "inj[0]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_PORT "inj[1]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_PORT "inj[2]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_PORT "inj[3]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_PORT "inj[4]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_PORT "inj[5]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_LOC "led[0]" 15;
+IO_LOC "led[1]" 16;
+IO_LOC "led[2]" 17;
+IO_LOC "led[3]" 18;
+IO_LOC "led[4]" 19;
+IO_LOC "led[5]" 20;
+IO_PORT "led[0]" IO_TYPE=LVCMOS33;
+IO_PORT "led[1]" IO_TYPE=LVCMOS33;
+IO_PORT "led[2]" IO_TYPE=LVCMOS33;
+IO_PORT "led[3]" IO_TYPE=LVCMOS33;
+IO_PORT "led[4]" IO_TYPE=LVCMOS33;
+IO_PORT "led[5]" IO_TYPE=LVCMOS33;

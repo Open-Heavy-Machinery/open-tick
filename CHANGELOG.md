@@ -6,6 +6,16 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **The Tang Nano 20K bridge's gateware** (`gateware/tang_nano_20k/`; v0.4, step 2). Simulated and synthesised, not yet run on a board.
+  - It covers protocol v1's bridge side: framing and CRC, configure/start/stop/exchange, the five states, a 64-setpoint FIFO in block RAM, steps with underruns, late setpoints and the link timeout.
+  - Signals: the 60−2 crank and cam from a 48-bit phase, six injector captures, four sigma-delta analog outputs.
+  - Pins as proposed for a NUCLEO-G431KB as the DUT; resources about 23 % of the LUTs and 4 block RAMs, 76 MHz against 27.
+- **Gateware tests** (CI job `gateware`):
+  - `sim/run.sh` runs `tb_units` (UART including ±3 % baud error, CRC, sigma-delta, rotary pattern, capture) and `tb_bridge`. `tb_bridge` is the whole bridge over its UART, scripted by `otk-bridge-vectors gen` and judged by `otk-bridge-vectors check`, both from the codec.
+  - `sim/mutations.sh`: 17 mutations, all killed.
+  - The bitstream is built twice and compared.
+- **`tools/fpga_toolchain.sh`:** the open FPGA toolchain (yosys, nextpnr-himbaechel, Apycula from pip; openFPGALoader 1.1.1 from its tarball), every file pinned by SHA-256 (`tools/fpga-requirements.lock`). It installs into a user cache, without sudo and isolated from the user's Python. `--synthesis-only` is for CI.
+
 - **The host ↔ bridge protocol v1 codec** (`core/include/opentick/bridge.h`; v0.4, step 1), against [docs/bridge-protocol.md](docs/bridge-protocol.md):
   - framing with CRC-16/IBM-3740, and every message's payload encoded and decoded: exchange, configure, start, stop and their replies;
   - a stream parser that resynchronises on the sync byte;

@@ -137,3 +137,43 @@ jobs:
         env:
           OTK_MUTATION_NEED_CAN: "1"
         run: tools/mutation_check.sh
+
+  gateware:
+    name: Tang Nano 20K gateware (simulation against the codec, mutations, reproducible synthesis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends iverilog
+          iverilog -V 2>&1 | head -1
+      - name: Build the codec's script generator and judge
+        run: |
+          cmake -S . -B build -DOTK_WERROR=ON
+          cmake --build build -j --target otk-bridge-vectors
+      - name: Simulate the blocks, and the whole bridge judged by the codec
+        run: gateware/tang_nano_20k/sim/run.sh build
+      - name: Break each gateware behaviour; the simulation must catch it
+        run: gateware/tang_nano_20k/sim/mutations.sh build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # the lock has wheels for CPython 3.10 to 3.13
+      - name: The pinned toolchain (every file by SHA-256)
+        run: tools/fpga_toolchain.sh --synthesis-only
+      - name: Build the bitstream twice; it must be the same
+        run: |
+          gateware/tang_nano_20k/build.sh "$PWD/build-gateware-1"
+          gateware/tang_nano_20k/build.sh "$PWD/build-gateware-2"
+          cmp build-gateware-1/bridge.fs build-gateware-2/bridge.fs
+          md5sum build-gateware-1/bridge.fs
+      - name: Upload the bitstream and the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tang-nano-20k-bridge
+          path: |
+            build-gateware-1/bridge.fs
+            build-gateware-1/yosys.log
+            build-gateware-1/nextpnr.log
+            build/gateware-sim/tb_bridge.log
