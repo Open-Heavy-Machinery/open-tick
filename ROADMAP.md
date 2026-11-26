@@ -130,12 +130,14 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - Fidelity contract, version 1: machines declare requirements, the bridge declares guarantees, and the runner checks them before a run.
 - Tang Nano 20K gateware; the toolchain decision (VISION.md, open question 3) is taken here.
 
+**Status:** the host-to-bridge protocol, version 1, is specified, not built ([docs/bridge-protocol.md](docs/bridge-protocol.md)).
+
 **Exit criteria**
 
-1. Host-to-bridge latency and throughput are measured and documented before anything else depends on them.
-2. open-crank's own v0.4 exit criteria are met through open-tick: a reference engine-ECU firmware achieves crank synchronisation and holds a requested speed.
-3. A jitter and latency budget is stated, then measured in the trace of every hard run.
-4. The runner refuses a run whose requirements exceed the bridge, and names the signal that fails.
+- [x] 1. Host-to-bridge latency and throughput are measured and documented before anything else depends on them. *[docs/bridge-protocol.md](docs/bridge-protocol.md#measured-link-bl616), with the reports, sources and raw-data checksums in [docs/measurements/2026-11-26-bl616/](docs/measurements/2026-11-26-bl616/): about 448 B each way per exchange of about 6 ms; round trip 0.26–6.2 ms depending on phase; clock mapping good to p99 45–85 µs; a 16 ms look-ahead held with every CPU busy on two hosts.*
+- [ ] 2. open-crank's own v0.4 exit criteria are met through open-tick: a reference engine-ECU firmware achieves crank synchronisation and holds a requested speed.
+- [ ] 3. A jitter and latency budget is stated, then measured in the trace of every hard run.
+- [ ] 4. The runner refuses a run whose requirements exceed the bridge, and names the signal that fails.
 
 ## v0.5: Profiles
 

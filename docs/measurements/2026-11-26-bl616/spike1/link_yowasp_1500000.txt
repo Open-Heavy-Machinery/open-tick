@@ -1,0 +1,5 @@
+device /dev/ttyUSB1 (ttyUSB1), baud 1500000, ftdi latency_timer 0 ms
+round trip: sent 1000 received 1000 lost 0 corrupted 0
+round trip us: min 5023.9 p50 5991.8 p99 6137.4 max 6218.1
+throughput: 32768 of 32768 bytes back, 0 missing, 0 wrong, 10675 B/s = 7.1 % of baud/10 (150000 B/s), window 64 B, chunk 64 B
+LINK OK

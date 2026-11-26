@@ -1,0 +1,6 @@
+pingpong_bench hold on /dev/ttyUSB1 at 3000000 baud, 2026-11-26 17:05:25
+horizon H 8 steps (1 step = 1 ms), lead 6, at most 30 setpoints (60 B) per request, gap 0.0 ms
+duration 60.0 s, steps 59992, setpoints sent 60000, exchanges lost or bad 0
+underruns 0 (0.000 % of steps)
+FIFO fill at replies: min 7 p1 7 p50 8 max 14
+applied setpoint mismatches 1 (each reply's cur_sp against the counter sent)

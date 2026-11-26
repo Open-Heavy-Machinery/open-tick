@@ -1,0 +1,6 @@
+H=8: 10001 replies; mismatches at reply index [1]; replies 0-1 (t1,step,fill,under,cur,sent): [1630761791851, 1334, 14, 0, 0, 14] [1630767737222, 1340, 8, 0, 5, 14]
+  from reply 1 on: 0 mismatches in 9999 comparisons
+H=16: 10001 replies; mismatches at reply index [1]; replies 0-1 (t1,step,fill,under,cur,sent): [1694792351344, 1331, 22, 0, 0, 22] [1694798301872, 1337, 16, 0, 5, 22]
+  from reply 1 on: 0 mismatches in 9999 comparisons
+H=32: 10000 replies; mismatches at reply index [1]; replies 0-1 (t1,step,fill,under,cur,sent): [1758829985332, 1334, 30, 0, 0, 30] [1758835996681, 1340, 32, 0, 5, 38]
+  from reply 1 on: 0 mismatches in 9998 comparisons
