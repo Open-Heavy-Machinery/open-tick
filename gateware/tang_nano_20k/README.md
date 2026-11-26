@@ -23,7 +23,7 @@ gateware/tang_nano_20k/sim/mutations.sh build   # every gateware mutation must b
 
 To program the board's SRAM (never its flash), run `tools/fpga_toolchain.sh` without `--synthesis-only`. It also builds openFPGALoader 1.1.1 from its pinned tarball. Then `eval "$(tools/fpga_toolchain.sh)"` and `openFPGALoader -b tangnano20k build-gateware/bridge.fs`.
 
-**The toolchain is open and pinned.** It is yosys, nextpnr-himbaechel and Apycula from pip (YoWASP), every file by SHA-256 in [tools/fpga-requirements.lock](../../tools/fpga-requirements.lock), with no sudo and nothing outside the cache. The same sources give the same bitstream: on two PCs for the spike (md5 `f1d6afb7…`), and in every CI run for this design.
+**The toolchain is open and pinned** (it needs CPython 3.10 to 3.13: the lock's wheels exist only for those). It is yosys, nextpnr-himbaechel and Apycula from pip (YoWASP), every file by SHA-256 in [tools/fpga-requirements.lock](../../tools/fpga-requirements.lock), with no sudo and nothing outside the cache. The same sources give the same bitstream: on two PCs for the spike (md5 `f1d6afb7…`), and in every CI run for this design.
 
 ## What it declares (configure's reply, §3.4)
 

@@ -72,6 +72,12 @@ elif [[ $check == 1 ]]; then
     missing=1
 else
     command -v python3 >/dev/null || { echo "fpga_toolchain.sh: python3 is needed" >&2; exit 2; }
+    # The lock pins wheels (numpy 2.2.6 among them) that exist for CPython 3.10 to 3.13 only.
+    pyv=$(py_clean python3 -I -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+    case $pyv in
+        3.10|3.11|3.12|3.13) ;;
+        *) echo "fpga_toolchain.sh: python3 is $pyv; the lock needs CPython 3.10 to 3.13 (put one first on PATH)" >&2; exit 2 ;;
+    esac
     echo "fpga_toolchain.sh: creating $VENV from requirements.lock (about 380 MB)" >&2
     mkdir -p "$DIR"
     # Built in place (a venv's scripts hard-code its path). The marker is

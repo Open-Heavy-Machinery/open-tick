@@ -156,6 +156,9 @@ jobs:
         run: gateware/tang_nano_20k/sim/run.sh build
       - name: Break each gateware behaviour; the simulation must catch it
         run: gateware/tang_nano_20k/sim/mutations.sh build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # the lock has wheels for CPython 3.10 to 3.13
       - name: The pinned toolchain (every file by SHA-256)
         run: tools/fpga_toolchain.sh --synthesis-only
       - name: Build the bitstream twice; it must be the same
