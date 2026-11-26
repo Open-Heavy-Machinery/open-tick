@@ -56,12 +56,18 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         host/src/pacer.c
         host/src/driver.c
         host/src/socketcan.c
+        host/src/hard.c
     )
     add_library(opentick::host ALIAS opentick_host)
     target_include_directories(opentick_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/host/include)
-    target_link_libraries(opentick_host PUBLIC opentick_core)
+    target_link_libraries(opentick_host PUBLIC opentick_core m)
     target_compile_options(opentick_host PRIVATE ${OTK_WARNINGS})
     otk_c11(opentick_host)
+    # The hard driver's measuring tool (host/probe/hard_probe.c).
+    add_executable(otk-hard-probe host/probe/hard_probe.c)
+    target_link_libraries(otk-hard-probe PRIVATE opentick_host)
+    target_compile_options(otk-hard-probe PRIVATE ${OTK_WARNINGS})
+    otk_c11(otk-hard-probe)
     set(OTK_HAS_HOST ON)
 else()
     set(OTK_HAS_HOST OFF)
