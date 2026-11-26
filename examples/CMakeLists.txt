@@ -51,4 +51,18 @@ if(OTK_BUILD_TESTS)
     add_test(NAME example_flywheel_delay_deterministic
              COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/flywheel_delay_a.csv ${FLYWHEEL_OUT}/flywheel_delay_b.csv)
     set_tests_properties(example_flywheel_delay_deterministic PROPERTIES FIXTURES_REQUIRED flywheel_delay_traces)
+
+    # Frame log (docs/frame-log-format.md) of the delay scenario: the one kept in
+    # the repository, byte for byte, and the same on a second run.
+    add_test(NAME example_flywheel_frames_write
+             COMMAND otk-flywheel ${FLYWHEEL_DELAY} --quiet --frames ${FLYWHEEL_OUT}/delay.frames.csv)
+    add_test(NAME example_flywheel_frames_write_b
+             COMMAND otk-flywheel ${FLYWHEEL_DELAY} --quiet --frames ${FLYWHEEL_OUT}/delay_b.frames.csv)
+    set_tests_properties(example_flywheel_frames_write example_flywheel_frames_write_b PROPERTIES FIXTURES_SETUP flywheel_frames)
+    add_test(NAME example_flywheel_frames
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${CMAKE_CURRENT_SOURCE_DIR}/flywheel/delay.frames.csv
+                     ${FLYWHEEL_OUT}/delay.frames.csv)
+    add_test(NAME example_flywheel_frames_deterministic
+             COMMAND ${CMAKE_COMMAND} -E compare_files ${FLYWHEEL_OUT}/delay.frames.csv ${FLYWHEEL_OUT}/delay_b.frames.csv)
+    set_tests_properties(example_flywheel_frames example_flywheel_frames_deterministic PROPERTIES FIXTURES_REQUIRED flywheel_frames)
 endif()

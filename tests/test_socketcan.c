@@ -97,6 +97,57 @@ static void test_fd_frames(void) {
     roundtrip(0x321U, OTK_CAN_FD | OTK_CAN_BRS, 12U);
 }
 
+/* Waits up to 200 ms for one frame, with what the kernel says about it. */
+static bool recv_ex_wait(OtkSocketCan *s, OtkCanFrame *f, OtkSocketCanRxInfo *info) {
+    for (int i = 0; i < 200; i++) {
+        const int r = otk_socketcan_recv_ex(s, f, info);
+        if (r != 0) {
+            return r == 1;
+        }
+        const struct timespec ms = { 0, 1000000L };
+        nanosleep(&ms, NULL);
+    }
+    return false;
+}
+
+/* Kernel timestamps on both sockets; the sender gets its own frame back. */
+static void test_timestamps_and_own_frames(void) {
+    CHECK(otk_socketcan_bus_clock(&rx_sock, false) == OTK_BUS_CLOCK_NONE);
+    CHECK(otk_socketcan_bus_clock(&rx_sock, true) == OTK_BUS_CLOCK_HOST);
+    CHECK(otk_socketcan_enable_timestamps(&rx_sock, false));
+    CHECK(otk_socketcan_enable_timestamps(&tx_sock, true));
+    CHECK(otk_socketcan_bus_clock(&rx_sock, true) == OTK_BUS_CLOCK_KERNEL);
+    CHECK(otk_socketcan_bus_clock(&rx_sock, false) == OTK_BUS_CLOCK_NONE);
+
+    const uint64_t before = otk_socketcan_clock_ns();
+    OtkCanFrame out;
+    memset(&out, 0, sizeof(out));
+    out.id = 0x0C000027U;
+    out.flags = OTK_CAN_EXTENDED;
+    out.len = 8U;
+    out.data[0] = 0xF1U;
+    CHECK(otk_socketcan_send(&tx_sock, &out));
+
+    OtkCanFrame in;
+    OtkSocketCanRxInfo rx, own;
+    CHECK(recv_ex_wait(&rx_sock, &in, &rx));
+    CHECK(in.id == out.id && !rx.own && rx.has_time);
+    CHECK(rx.time_ns >= before && rx.time_ns - before < UINT64_C(1000000000));
+
+    CHECK(recv_ex_wait(&tx_sock, &in, &own));
+    CHECK(in.id == out.id && own.own && own.has_time);
+    CHECK(own.time_ns >= before && own.time_ns - before < UINT64_C(1000000000));
+    CHECK(otk_socketcan_run_time(own.time_ns, before) == own.time_ns - before);
+    CHECK(otk_socketcan_run_time(UINT64_C(5), UINT64_C(10)) == OTK_FRAMELOG_NO_TIME); /* before the anchor */
+
+    /* the plain receive skips the socket's own frames: nothing else is waiting */
+    CHECK(otk_socketcan_send(&tx_sock, &out));
+    const struct timespec ms20 = { 0, 20000000L };
+    nanosleep(&ms20, NULL);
+    CHECK(otk_socketcan_recv(&tx_sock, &in) == 0);
+    CHECK(recv_ex_wait(&rx_sock, &in, &rx) && !rx.own);
+}
+
 int main(void) {
     const char *ifname = getenv("OTK_TEST_CAN_IF");
     if (ifname == NULL || ifname[0] == '\0') {
@@ -114,6 +165,7 @@ int main(void) {
     RUN_TEST(test_classic_frames);
     RUN_TEST(test_invalid_frames_are_refused);
     RUN_TEST(test_fd_frames);
+    RUN_TEST(test_timestamps_and_own_frames);
     otk_socketcan_close(&tx_sock);
     otk_socketcan_close(&rx_sock);
     otk_socketcan_close(&rx_sock); /* closing twice is safe */

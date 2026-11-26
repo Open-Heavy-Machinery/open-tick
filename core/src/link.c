@@ -58,33 +58,46 @@ static OtkNs add_sat(OtkNs a, OtkNs b) {
     return (a > UINT64_MAX - b) ? UINT64_MAX : a + b;
 }
 
-bool otk_link_push(OtkLink *link, const OtkCanFrame *frame, OtkNs t) {
+static bool lost_at_push(OtkLinkInfo *info, OtkLinkLoss why, OtkNs t) {
+    if (info != NULL) {
+        info->lost = why;
+        info->corrupted = false;
+        info->pushed = t;
+        info->due = t;
+    }
+    return false;
+}
+
+bool otk_link_push_ex(OtkLink *link, const OtkCanFrame *frame, OtkNs t, OtkLinkInfo *info) {
     const OtkLinkFaults *fl = &link->faults;
     if (fl->bus_off) {
         link->bus_off_lost++;
-        return false;
+        return lost_at_push(info, OTK_LINK_LOST_BUS_OFF, t);
     }
     if (fl->drop && matches(link, OTK_LINK_DROP, frame)) {
         link->dropped++;
-        return false;
+        return lost_at_push(info, OTK_LINK_LOST_DROP, t);
     }
     if (fl->drop_one_in > 0U && matches(link, OTK_LINK_DROP_ONE_IN, frame)) {
         link->matched_one_in++;
         if (link->matched_one_in >= fl->drop_one_in) {
             link->matched_one_in = 0U;
             link->dropped++;
-            return false;
+            return lost_at_push(info, OTK_LINK_LOST_DROP_ONE_IN, t);
         }
     }
     if (link->n >= link->cap) {
         link->overflows++;
-        return false;
+        return lost_at_push(info, OTK_LINK_LOST_OVERFLOW, t);
     }
 
     OtkLinkSlot *s = &link->line[link->n];
     s->frame = *frame;
+    s->pushed = t;
+    s->corrupted = false;
     if (fl->corrupt > 0U && fl->corrupt <= frame->len && matches(link, OTK_LINK_CORRUPT, frame)) {
         s->frame.data[fl->corrupt - 1U] ^= 0xFFU;
+        s->corrupted = true;
         link->corrupted++;
     }
     OtkNs due = t;
@@ -103,30 +116,56 @@ bool otk_link_push(OtkLink *link, const OtkCanFrame *frame, OtkNs t) {
     }
     s->due = due;
     link->n++;
+    if (info != NULL) {
+        info->lost = OTK_LINK_LOST_NONE;
+        info->corrupted = s->corrupted;
+        info->pushed = t;
+        info->due = due;
+    }
+    return true;
+}
+
+bool otk_link_push(OtkLink *link, const OtkCanFrame *frame, OtkNs t) {
+    return otk_link_push_ex(link, frame, t, NULL);
+}
+
+bool otk_link_pop_ex(OtkLink *link, OtkNs now, OtkCanFrame *out, OtkLinkInfo *info) {
+    size_t best = link->n;
+    for (size_t i = 0; i < link->n; i++) {
+        if (link->line[i].due <= now && (best == link->n || link->line[i].due < link->line[best].due)) {
+            best = i; /* strict <: on a tie the earlier push wins */
+        }
+    }
+    if (best == link->n) {
+        return false;
+    }
+    const OtkLinkSlot slot = link->line[best];
+    memmove(&link->line[best], &link->line[best + 1U], (link->n - best - 1U) * sizeof(link->line[0]));
+    link->n--;
+    const bool lost = link->faults.bus_off; /* due while the bus is off: lost */
+    if (lost) {
+        link->bus_off_lost++;
+    }
+    *out = slot.frame;
+    if (info != NULL) {
+        info->lost = lost ? OTK_LINK_LOST_BUS_OFF : OTK_LINK_LOST_NONE;
+        info->corrupted = slot.corrupted;
+        info->pushed = slot.pushed;
+        info->due = slot.due;
+    }
     return true;
 }
 
 bool otk_link_pop(OtkLink *link, OtkNs now, OtkCanFrame *out) {
-    for (;;) {
-        size_t best = link->n;
-        for (size_t i = 0; i < link->n; i++) {
-            if (link->line[i].due <= now && (best == link->n || link->line[i].due < link->line[best].due)) {
-                best = i; /* strict <: on a tie the earlier push wins */
-            }
+    OtkLinkInfo info;
+    OtkCanFrame f;
+    while (otk_link_pop_ex(link, now, &f, &info)) {
+        if (info.lost == OTK_LINK_LOST_NONE) {
+            *out = f;
+            return true;
         }
-        if (best == link->n) {
-            return false;
-        }
-        const OtkCanFrame f = link->line[best].frame;
-        memmove(&link->line[best], &link->line[best + 1U], (link->n - best - 1U) * sizeof(link->line[0]));
-        link->n--;
-        if (link->faults.bus_off) {
-            link->bus_off_lost++;
-            continue; /* due while the bus is off: lost */
-        }
-        *out = f;
-        return true;
     }
+    return false;
 }
 
 size_t otk_link_count(const OtkLink *link) {

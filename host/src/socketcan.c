@@ -15,6 +15,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
+#include <time.h>
 #include <unistd.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
@@ -22,6 +24,8 @@
 bool otk_socketcan_open(OtkSocketCan *s, const char *ifname) {
     s->fd = -1;
     s->fd_capable = false;
+    s->timestamps = false;
+    s->own_msgs = false;
 
     if (strlen(ifname) >= IFNAMSIZ) {
         errno = ENAMETOOLONG;
@@ -114,12 +118,80 @@ bool otk_socketcan_send(OtkSocketCan *s, const OtkCanFrame *f) {
     return write(s->fd, &frame, CAN_MTU) == (ssize_t)CAN_MTU;
 }
 
+bool otk_socketcan_enable_timestamps(OtkSocketCan *s, bool own_msgs) {
+    const int on = 1;
+    if (setsockopt(s->fd, SOL_SOCKET, SO_TIMESTAMPNS, &on, sizeof(on)) < 0) {
+        return false;
+    }
+    if (own_msgs && setsockopt(s->fd, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS, &on, sizeof(on)) < 0) {
+        const int saved = errno;
+        const int off = 0;
+        (void)setsockopt(s->fd, SOL_SOCKET, SO_TIMESTAMPNS, &off, sizeof(off));
+        errno = saved;
+        return false;
+    }
+    s->timestamps = true;
+    s->own_msgs = own_msgs;
+    return true;
+}
+
+uint64_t otk_socketcan_clock_ns(void) {
+    struct timespec ts;
+    (void)clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint64_t)ts.tv_sec * OTK_NS_PER_S + (uint64_t)ts.tv_nsec;
+}
+
+OtkNs otk_socketcan_run_time(uint64_t time_ns, uint64_t anchor_ns) {
+    return (time_ns < anchor_ns) ? OTK_FRAMELOG_NO_TIME : (OtkNs)(time_ns - anchor_ns);
+}
+
+OtkBusClock otk_socketcan_bus_clock(const OtkSocketCan *s, bool paced) {
+    if (!paced) {
+        return OTK_BUS_CLOCK_NONE;
+    }
+    return s->timestamps ? OTK_BUS_CLOCK_KERNEL : OTK_BUS_CLOCK_HOST;
+}
+
 int otk_socketcan_recv(OtkSocketCan *s, OtkCanFrame *f) {
     for (;;) {
+        OtkSocketCanRxInfo info;
+        const int r = otk_socketcan_recv_ex(s, f, &info);
+        if (r != 1 || !info.own) {
+            return r;
+        }
+        /* this socket's own frame, back for its timestamp: not for this caller */
+    }
+}
+
+int otk_socketcan_recv_ex(OtkSocketCan *s, OtkCanFrame *f, OtkSocketCanRxInfo *info) {
+    for (;;) {
         struct canfd_frame frame;
-        const ssize_t n = read(s->fd, &frame, sizeof(frame));
+        struct iovec iov = { &frame, sizeof(frame) };
+        union {
+            char buf[CMSG_SPACE(sizeof(struct timespec)) + 64];
+            struct cmsghdr align;
+        } ctrl;
+        struct msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+        msg.msg_control = ctrl.buf;
+        msg.msg_controllen = sizeof(ctrl.buf);
+        const ssize_t n = recvmsg(s->fd, &msg, 0);
         if (n < 0) {
             return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1;
+        }
+        info->own = (msg.msg_flags & MSG_CONFIRM) != 0;
+        info->has_time = false;
+        info->time_ns = 0U;
+        for (struct cmsghdr *c = CMSG_FIRSTHDR(&msg); c != NULL; c = CMSG_NXTHDR(&msg, c)) {
+            if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPNS &&
+                c->cmsg_len >= CMSG_LEN(sizeof(struct timespec))) {
+                struct timespec ts;
+                memcpy(&ts, CMSG_DATA(c), sizeof(ts));
+                info->has_time = true;
+                info->time_ns = (uint64_t)ts.tv_sec * OTK_NS_PER_S + (uint64_t)ts.tv_nsec;
+            }
         }
         const bool fd = n == (ssize_t)CANFD_MTU;
         if (!fd && n != (ssize_t)CAN_MTU) {

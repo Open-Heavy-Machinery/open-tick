@@ -16,6 +16,7 @@ To a microcontroller, the world is voltages on pins, edges with timing and frame
 - **Bridges.** An in-memory bridge and Linux SocketCAN (`vcan` or a USB-CAN adapter) today; *(planned)* a Tang Nano 20K on the pins for open-crank's Level 2, and a Raspberry Pi Pico when open-robots starts.
 - **An oracle** that grades a device under test only by the frames it sends, against criteria written as data, with reaction times measured from the injected event. The application says what its frames mean; the criteria format is documented in [docs/criteria-format.md](docs/criteria-format.md). Its verdicts can also be written as a file for programs and viewers ([docs/verdict-format.md](docs/verdict-format.md)), which [open-rig](https://github.com/Open-Heavy-Machinery/open-rig) draws over the trace.
 - **Traces** with columns the application registers, which refuse to shift a column silently. The file's shape is documented in [docs/trace-format.md](docs/trace-format.md).
+- **Frame logs** *(v0.3.1, in progress)*: every CAN frame of a run, with its logical time (the step, which places it on the trace's axis), its bus time (measured, with the clock named in the file) and what the links did to it ([docs/frame-log-format.md](docs/frame-log-format.md)).
 - *(planned)* **A fidelity contract.** Each machine says what it needs, each bridge says what it guarantees, and a run that cannot be faithful is refused instead of passing quietly.
 
 ## The family
@@ -49,6 +50,7 @@ ctest --test-dir build --output-on-failure
 ./build/otk-flywheel examples/flywheel/step.csv --driver paced    # the same run, in wall-clock time
 ./build/otk-flywheel examples/flywheel/step.csv --criteria examples/flywheel/step.accept.csv
 ./build/otk-flywheel examples/flywheel/delay.csv --criteria examples/flywheel/delay.accept.csv  # SPEED delayed 300 ms (v0.3)
+./build/otk-flywheel examples/flywheel/delay.csv --frames delay.frames.csv                      # every frame, two times (v0.3.1)
 ```
 
 ## Using it from an application
@@ -71,13 +73,13 @@ open-tick/
 ├── examples/    otk-flywheel
 ├── tests/       unit tests and their data
 ├── tools/       dependency and mutation checks
-└── docs/        trace format; open-crank integration plan and trial run
+└── docs/        trace, criteria, verdict and frame log formats; link faults; open-crank integration
 ```
 
 ## Checks
 
 - `tools/check_deps.sh`: `core/` uses ISO C only, and nothing includes an application.
-- `tools/mutation_check.sh`: breaks 18 behaviours on purpose and requires the tests to notice each one.
+- `tools/mutation_check.sh`: breaks 38 behaviours on purpose and requires the tests to notice each one.
 
 CI runs both, plus gcc and clang in Debug and Release with warnings as errors, a sanitizer build, a core-only build on macOS, and the SocketCAN bridge on `vcan` when the runner allows it.
 
