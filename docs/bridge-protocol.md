@@ -1,6 +1,8 @@
 # The host ↔ bridge protocol, version 1
 
-**Status: specification, not built.** This is the contract that open-tick v0.4's hard driver *(planned)* and the Tang Nano 20K gateware *(planned)* will implement, and that every later signal-level bridge (for example the Raspberry Pi Pico) will speak ([ROADMAP.md](../ROADMAP.md), v0.4). Nothing in this repository implements it yet.
+**Status: specification; partly built.** This is the contract that open-tick v0.4's hard driver *(planned)* and the Tang Nano 20K gateware *(planned)* will implement, and that every later signal-level bridge (for example the Raspberry Pi Pico) will speak ([ROADMAP.md](../ROADMAP.md), v0.4).
+- **Built:** the codec, in [`core/include/opentick/bridge.h`](../core/include/opentick/bridge.h): framing, CRC, every payload, a parser that resynchronises, and the unit conversions.
+- **Not built yet:** what drives it. The bridge's state machine, the exchanges in time and the clock mapping are not built.
 
 It carries what crosses the USB link between the host, which runs the core and the plant, and a signal-level bridge, which produces and captures edges and levels on the pins of the device under test (DUT) ([VISION.md §5.2](../VISION.md#52-two-kinds-of-transport)). Message transports such as CAN stay on the host and do not use it.
 

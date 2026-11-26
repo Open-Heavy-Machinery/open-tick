@@ -218,6 +218,23 @@ else
     echo "note      socketcan mutations skipped: no CAN interface (test_socketcan exited $can_rc)"
 fi
 
+# The host <-> bridge protocol codec (v0.4 step 1).
+BRG=core/src/bridge.c
+mutate "bridge: CRC starts at 0 instead of 0xFFFF" $BRG \
+    "uint32_t crc = 0xFFFFu;" "uint32_t crc = 0x0000u;"
+mutate "bridge: 16-bit fields big-endian" $BRG \
+    "p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)(v >> 8);" "p[1] = (uint8_t)(v & 0xFFu);
+    p[0] = (uint8_t)(v >> 8);"
+mutate "bridge: a failed candidate frame dropped whole" $BRG \
+    "drop(p, 1); /* a valid frame may start inside this one */" "drop(p, need);"
+mutate "bridge: reply's state byte not written" $BRG \
+    "out[20] = m->state;" "(void)0;"
+mutate "bridge: capture tick extended past the reference" $BRG \
+    "if (t > ref) {" "if (t > ref + 1u) {"
+mutate "bridge: phase increment truncated, not rounded" $BRG \
+    "/ (double)tick_hz + 0.5;" "/ (double)tick_hz;"
+
 echo
 echo "$killed mutations killed, $problems problems"
 [[ $problems -eq 0 ]]

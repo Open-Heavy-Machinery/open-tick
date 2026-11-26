@@ -19,6 +19,7 @@ target_compile_definitions(test_version PRIVATE OTK_PROJECT_VERSION="${PROJECT_V
 otk_test(test_oracle opentick_core)
 otk_test(test_link opentick_core)
 otk_test(test_framelog opentick_core)
+otk_test(test_bridge opentick_core)
 
 add_test(NAME test_signals COMMAND test_signals)
 add_test(NAME test_scenario COMMAND test_scenario ${CMAKE_CURRENT_SOURCE_DIR}/data ${CMAKE_CURRENT_BINARY_DIR})
@@ -29,6 +30,7 @@ add_test(NAME test_version COMMAND test_version)
 add_test(NAME test_oracle COMMAND test_oracle)
 add_test(NAME test_link COMMAND test_link)
 add_test(NAME test_framelog COMMAND test_framelog)
+add_test(NAME test_bridge COMMAND test_bridge)
 
 if(OTK_HAS_HOST)
     otk_test(test_driver opentick_host)

@@ -6,6 +6,14 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **The host ↔ bridge protocol v1 codec** (`core/include/opentick/bridge.h`; v0.4, step 1), against [docs/bridge-protocol.md](docs/bridge-protocol.md):
+  - framing with CRC-16/IBM-3740, and every message's payload encoded and decoded: exchange, configure, start, stop and their replies;
+  - a stream parser that resynchronises on the sync byte;
+  - the speed ↔ phase-increment conversion (48-bit phase, 720°) and analog setpoints;
+  - the extension of a capture's 32-bit tick to 64 bits.
+
+  Pure ISO C in `core/`, no allocation. `ctest`: `test_bridge`. Six more mutations, 53 in all.
+
 - `otk-flywheel --seed <n>`: the seed of the speed link's PRNG, which draws the jitter (default 1, as before, so every existing output is unchanged). [examples/flywheel/jitter.csv](examples/flywheel/jitter.csv) adds 0 to 30 ms of jitter to SPEED for a second. `ctest`: no `--seed` is seed 1, the same seed gives the same frame log, seeds 1 and 2 give different ones, and a seed that is not a whole number is refused. One more mutation ("flywheel: --seed is ignored"; 47 in all).
 
 - `tools/mutation_check.sh`: eight SocketCAN mutations (46 in all): kernel timestamps (`SO_TIMESTAMPNS`, the reported time and its nanoseconds, the anchor), the socket's own frames (`CAN_RAW_RECV_OWN_MSGS`, the `own` flag, the plain receive skipping them) and the bus clock's name. `test_socketcan` kills each one. They run only with a CAN interface; `OTK_MUTATION_NEED_CAN=1` makes a missing one a problem.
