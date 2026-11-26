@@ -13,7 +13,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.2** (done) | Oracle: grading the DUT by what its transports show | open-crank v0.2.1 |
 | **v0.2.1** (done) | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
 | **v0.3** (done) | Transport faults | open-crank v0.3 |
-| **v0.3.1** | Frame logs: every frame of a run, with logical and bus time | open-rig v0.3 (bus view) |
+| **v0.3.1** (done) | Frame logs: every frame of a run, with logical and bus time | open-rig v0.3 (bus view) |
 | **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
 | **Track R** | Renode virtual-time driver (parallel) | open-crank Track R |
@@ -106,13 +106,13 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 
 **Out of scope.** Signal-level transports, and the `bridge` clock, which come with v0.4's hard driver; error and RTR frames.
 
-**Status:** in progress *(planned until merged)*.
+**Status: done** (2026-11-26, tagged `v0.3.1`).
 
 **Exit criteria**
 
-- [ ] 1. In memory, a link's delay shows exactly as `t_bus_s − t_s`; lost frames carry their reason; two free-run runs give the same file byte for byte.
-- [ ] 2. Over SocketCAN (`vcan` in CI), received and sent frames carry kernel timestamps, and code that does not ask for them sees exactly what it saw before.
-- [ ] 3. Existing traces and verdict files are unchanged, byte for byte.
+- [x] 1. In memory, a link's delay shows exactly as `t_bus_s − t_s`; lost frames carry their reason; two free-run runs give the same file byte for byte. *[#15](https://github.com/Open-Heavy-Machinery/open-tick/pull/15): `test_framelog` (delay exact, every loss with its reason, corruption, determinism); [examples/flywheel/delay.frames.csv](examples/flywheel/delay.frames.csv), 99 SPEED frames at 0.300000000 inside the delay, checked byte for byte and between two runs (`example_flywheel_frames`, `example_flywheel_frames_deterministic`).*
+- [x] 2. Over SocketCAN (`vcan` in CI), received and sent frames carry kernel timestamps, and code that does not ask for them sees exactly what it saw before. *[#15](https://github.com/Open-Heavy-Machinery/open-tick/pull/15): `test_socketcan`'s `test_timestamps_and_own_frames` on `vcan` in CI (run 45741473095); `otk_socketcan_recv()` skips the socket's own frames.*
+- [x] 3. Existing traces and verdict files are unchanged, byte for byte. *[#15](https://github.com/Open-Heavy-Machinery/open-tick/pull/15): `step` and `delay` traces and verdicts compared between `main` and the branch; `example_flywheel_verdicts` unchanged; `test_link`'s existing tests untouched.*
 
 ## v0.4: Tang Nano 20K bridge
 
