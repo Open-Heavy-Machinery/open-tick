@@ -1,5 +1,6 @@
-# Unit tests. Headless; only test_driver touches the wall clock, and only
-# test_socketcan needs a CAN interface (it is skipped without one). They use
+# Unit tests. Headless; test_driver and the hard driver's tests (against a
+# fake bridge on a pseudo-terminal) touch the wall clock, and test_socketcan
+# and test_hard_can need a CAN interface (they are skipped without one). They use
 # CHECK (tests/check.h), never assert(), so Release builds still test.
 
 function(otk_test name)
@@ -37,10 +38,32 @@ if(OTK_HAS_HOST)
     otk_test(test_socketcan opentick_host)
     find_package(Threads REQUIRED)
     otk_test(test_hard opentick_host Threads::Threads util)
+    otk_test(test_hard_loop opentick_host Threads::Threads util m)
+    target_sources(test_hard_loop PRIVATE fake_bridge.c)
+    otk_test(test_hard_can opentick_host Threads::Threads util m)
+    target_sources(test_hard_can PRIVATE fake_bridge.c)
     add_test(NAME test_driver COMMAND test_driver)
     add_test(NAME test_hard COMMAND test_hard)
+    add_test(NAME test_hard_loop COMMAND test_hard_loop)
+    add_test(NAME test_hard_can COMMAND test_hard_can)
     add_test(NAME test_socketcan COMMAND test_socketcan)
-    set_tests_properties(test_socketcan PROPERTIES SKIP_RETURN_CODE 77)
+    set_tests_properties(test_socketcan test_hard_can PROPERTIES SKIP_RETURN_CODE 77)
+    # The fake bridge as a program, and otk-flywheel --driver hard against it.
+    add_executable(otk-fake-bridge fake_bridge_main.c fake_bridge.c)
+    target_compile_options(otk-fake-bridge PRIVATE ${OTK_WARNINGS})
+    otk_c11(otk-fake-bridge)
+    target_link_libraries(otk-fake-bridge PRIVATE opentick_core Threads::Threads util m)
+    if(OTK_BUILD_EXAMPLES)
+        add_test(NAME example_flywheel_hard
+                 COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/hard_flywheel.sh ${CMAKE_BINARY_DIR}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/data/hard_short.csv ${CMAKE_CURRENT_BINARY_DIR}/hard_flywheel)
+        set_tests_properties(example_flywheel_hard PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK can_interface)
+    endif()
+    # The hard driver's tests run in real time against the fake bridge: alone,
+    # so that a parallel ctest does not make them miss steps. The tests that
+    # use the CAN interface take it one at a time (each sees the others' frames).
+    set_tests_properties(test_hard_loop test_hard_can PROPERTIES RUN_SERIAL TRUE)
+    set_tests_properties(test_socketcan test_hard_can PROPERTIES RESOURCE_LOCK can_interface)
 endif()
 
 # The gateware's system testbench takes its script from the codec and is

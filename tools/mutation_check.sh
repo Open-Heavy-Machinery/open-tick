@@ -250,6 +250,50 @@ mutate "hard: bins with no good sample kept in the clock mapping" $HARD \
 mutate "hard: every reply counted as the next cycle" $HARD \
     "k[i] = k[i - 1] + nearbyint((double)(t[i] - t[i - 1]) / p1);" "k[i] = k[i - 1] + 1.0;"
 
+# The hard driver's step loop (v0.4 step 4), against the fake bridge.
+LOOP=host/src/hard_loop.c
+mutate "hard loop: the plant kept 1 step ahead, not H" $LOOP \
+    "const uint32_t target = otk_hard_aim_step(&l->aim, plan) + l->cfg.h + 1u;" \
+    "const uint32_t target = otk_hard_aim_step(&l->aim, plan) + 2u;"
+mutate "hard loop: an underrun is not a degraded run" $LOOP \
+    "if (l->stats.underruns != 0u || l->stats.late != 0u" "if (l->stats.late != 0u"
+mutate "hard loop: late setpoints not counted" $LOOP \
+    "l->stats.late += d->error_count;" "l->stats.late += 0u;"
+mutate "hard loop: an aborted run reported as finished" $LOOP \
+    "if (l->aborted || !l->started) {
+        return OTK_HARD_ABORTED;" "if (!l->started) {
+        return OTK_HARD_ABORTED;"
+mutate "hard loop: a capture's start not extended to 64 bits" $LOOP \
+    "c->start_tick = tick;" "c->start_tick = d->cap[i].start;"
+mutate "hard loop: a bridge that is not fresh accepted" $LOOP \
+    "if (d.state != OTK_BRIDGE_IDLE) {" "if (d.state == 0xFFu) {"
+mutate "hard loop: missing analog outputs not refused" $LOOP \
+    "l->caps.n_analog < cfg->need_analog ||" ""
+mutate "hard loop: the applied setpoint never checked" $LOOP \
+    "if (!same_setpoint(&d->applied, &l->ring[d->step % OTK_HARD_RING])) {" "if (false) {"
+mutate "hard loop: aiming ignores the drift" $LOOP \
+    "return (double)a->tick_hz / 1e9 * (1.0 + a->drift);" "return (double)a->tick_hz / 1e9;"
+mutate "hard loop: REALTIME -> MONOTONIC error leaves out how far the offset moved" $LOOP \
+    "return m->half_width_max_ns + (uint64_t)(m->offset_max - m->offset_min);" "return m->half_width_max_ns;"
+mutate "hard loop: the budget's within compares the wrong way" $LOOP \
+    "fputs(measured <= declared ? \"yes\" : \"no\", fp);" "fputs(measured >= declared ? \"yes\" : \"no\", fp);"
+mutate "flywheel: an aborted hard run exits 0" $FLYWHEEL \
+    "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : EXIT_ABORTED;" "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : 0;"
+if [[ $can_rc -eq 0 ]]; then
+    mutate "hard loop: CAN frames sent when queued, not at their step" $LOOP \
+        "        if (due > until) {
+            return;
+        }" ""
+    mutate "hard loop: a kernel timestamp mapped without REALTIME -> MONOTONIC" $LOOP \
+        "return otk_hard_loop_bridge_ns(l, otk_rt_mono_to_mono(&l->rt, realtime_ns), bridge_ns);" \
+        "return otk_hard_loop_bridge_ns(l, realtime_ns, bridge_ns);"
+elif [[ ${OTK_MUTATION_NEED_CAN:-0} == 1 ]]; then
+    echo "NO CAN    hard loop CAN mutations not run (no CAN interface?)"
+    problems=$((problems + 1))
+else
+    echo "note      hard loop CAN mutations skipped: no CAN interface"
+fi
+
 echo
 echo "$killed mutations killed, $problems problems"
 [[ $problems -eq 0 ]]

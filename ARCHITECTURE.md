@@ -114,7 +114,7 @@ The **pacer** sleeps until absolute `CLOCK_MONOTONIC` deadlines. It is open-cran
 
 A late iteration restarts the schedule from now instead of running a burst of catch-up steps.
 
-A **driver** wraps one loop shape for every mode: step, then `otk_driver_wait`. Free-run returns at once; paced calls the pacer. The virtual (emulator) and hard (bridge) drivers will be more cases of the same enum.
+A **driver** wraps one loop shape for every mode: step, then `otk_driver_wait`. Free-run returns at once; paced calls the pacer; hard returns when the plant may compute its next step on the bridge's clock (§3.15). The virtual (emulator) driver will be one more case of the same enum *(planned, Track R)*.
 
 **Why measure lateness now.** The fidelity contract (VISION.md §5.4) needs measured timing, not assumed timing. A paced SIL run can already report its worst wake-up, as `otk-flywheel --driver paced` does.
 
@@ -190,7 +190,7 @@ The host ↔ bridge protocol, version 1 ([docs/bridge-protocol.md](docs/bridge-p
 - the conversions from speed to phase increment and from a fraction to an analog value;
 - the extension of a capture's 32-bit tick to 64 bits.
 
-The gateware and the hard driver that will use it are *(planned)*.
+The gateware (§3.13), the hard driver (§3.14, §3.15) and the tests' fake bridge use it.
 
 **Why both sides in one codec.** The host encodes requests and decodes replies. A bridge simulator, the tests and the vectors for the gateware's testbenches need the other direction, so one codec avoids two descriptions of the same bytes drifting apart.
 
@@ -221,7 +221,7 @@ The bitstream is reproducible, and CI checks it.
 
 ### 3.14 The hard driver's host side (`host/hard.h`) *(v0.4, in progress)*
 
-The serial link to a signal-level bridge, the clock mapping, and the link's forwarding cycle. `otk-hard-probe` (`host/probe/`) measures a bridge with them. Stepping a plant on the bridge's clock, inside open-tick's driver, is the next part *(planned)*.
+The serial link to a signal-level bridge, the clock mapping, and the link's forwarding cycle. `otk-hard-probe` (`host/probe/`) measures a bridge with them. The step loop that uses them is §3.15.
 
 - **One request, one reply.** `otk_hard_transact()` writes a frame and waits for the reply with the same `seq`. It skips a stale reply and any junk, such as the BL616's banner. T1 is taken just before the write, and T4 when the reply's last byte was read.
 - **The clock mapping** keeps the lowest-delay sample of each bin of host time and fits a line through the last 32 bins. It leaves out a bin with no good sample, and states its bound: the largest residual plus half the smallest delay ([docs/bridge-protocol.md](docs/bridge-protocol.md) §4).
@@ -229,6 +229,28 @@ The serial link to a signal-level bridge, the clock mapping, and the link's forw
 **Why exchanges are scheduled against the link's cycle.** The BL616 holds each reply until its next forwarding instant, every 6 ms. A request written at a random time waits on average half a cycle for its reply. One written just in time, with its and its reply's bytes on the wire and a 600 µs margin, comes back at that instant: about 1 ms instead of up to 6. The cycle is estimated from the replies' arrival times. `otk_hard_wait_until()` sleeps, then spins the last 300 µs with a 1 ns timer slack, because an idle CPU wakes up late.
 
 **Why setpoints are aimed from the request's direction.** The BL616 link is asymmetric: requests arrive at once, replies wait. The symmetric offset of §4 is biased by half the wait, and setpoints aimed with it arrived three steps late. The bridge's tick now is T2 + (now − T1) from the last request. The bound published stays the symmetric one (§4.1).
+
+### 3.15 The hard driver's step loop (`host/hard_loop.h`) *(v0.4, in progress)*
+
+The core steps on the bridge's clock, and the plant runs H steps ahead of it ([docs/bridge-protocol.md](docs/bridge-protocol.md) §2, §8). The application keeps its loop: step, give the step's setpoint (`otk_hard_loop_set()`), then `otk_driver_wait()` with a hard driver attached.
+
+- **Open** (§8, steps 1–2): drain the banner; refuse a bridge that is not idle, i.e. not freshly programmed (F-17); configure and check the bridge's tick, analog outputs and capture channels; then two seconds of back-to-back exchanges, to learn the forwarding cycle and the clock mapping.
+- **Fill and start:** the first H steps are queued without waiting, sent in one exchange, and the bridge is started.
+- **Then one exchange per forwarding cycle.** Before each, the loop asks where the bridge will be at the planned send, from the fast direction. While the plant is less than H steps ahead of that, `otk_hard_loop_next()` returns so that the application computes another step. Otherwise it waits for the send and sends every setpoint computed since the last exchange.
+- **Every reply is checked:**
+  - underruns, late setpoints, a refused sequence;
+  - that the setpoint applied at its step is the one sent for it, once that step had begun when the request arrived;
+  - the lowest fill, and the round trip;
+  - the mapping's bound.
+- **Captures** are extended to 64 bits with T3 and handed to the application with the bridge step they started in, at the first step it computes after they arrive.
+- **The outcome** is `ok`, `degraded` (an underrun, a late setpoint, a wrong applied setpoint) or `aborted` (no reply after the retransmissions, or the bridge's link timeout).
+- **The stop.** The loop keeps exchanging until the bridge is half-way through the application's last step, with that setpoint queued again behind it, and stops the bridge then.
+- **CAN on the bridge's clock** (§5): a frame queued for step k goes out when the bridge begins step k. A kernel timestamp is mapped REALTIME → MONOTONIC → bridge, and that step's error is measured in the run (`OtkRtMono`).
+- **The budget file** (§9, `otk_hard_budget_write()`) puts each declared quantity next to its measurement, with the USB path (`otk_hard_usb_path()`), the bitstream's md5 and the commit.
+
+**Why the loop does not raise its priority.** `SCHED_FIFO` might allow a smaller H under load, but it needs the user's real-time priority limit raised (sudo). It is a deferred improvement; until then the budget states what a normal-priority sender holds.
+
+**Why H is in steps.** The default of 16 was measured at 1 ms steps. At the flywheel's 10 ms steps, 16 steps are 160 ms of lead, far more than the link needs (one exchange per 6 ms). The application picks H for its step.
 
 ## 4. Consuming open-tick
 
@@ -264,4 +286,13 @@ open-crank consumes it as a git submodule in `external/open-tick`; what that cha
   - the cycle estimate on synthetic arrivals with jitter and skipped cycles;
   - the clock mapping on a known offset and drift, leaving out bins with no good sample;
   - a whole transaction against a fake bridge on a pseudo-terminal: a banner, a stale reply, a reply in two pieces, a retransmission, a timeout.
-- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 58 behaviours that applications rely on (50 without a CAN interface), and the tests must catch each one. Six are the bridge codec's, five the hard driver's. Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and one `otk-flywheel`'s.
+- **`test_hard_loop`** runs the step loop against a fake bridge (`tests/fake_bridge.c`) on a pseudo-terminal. The fake has its own tick with an offset and a drift, the five states, a step engine with underruns and late setpoints, retransmissions, the link timeout, captures, and replies held to a forwarding cycle like the BL616's. The test checks:
+  - a run that ends ok, with every step the bridge ran applying the setpoint computed for it, the buffer near H, and the stop in the last step;
+  - an underrun, a late setpoint and a setpoint applied other than sent (degraded), a bridge that falls silent (aborted, after the retransmissions);
+  - a capture handed over with its step and its 64-bit start;
+  - a bridge that is not fresh, and one with too few analog outputs, refused;
+  - aiming at a step, the REALTIME → MONOTONIC step, the budget file.
+- **`test_hard_can`** (needs a CAN interface, like `test_socketcan`) sends frames at their step on a synthetic mapping and through the whole loop, reads them back with kernel timestamps and maps them onto the bridge.
+- **`example_flywheel_hard`** runs `otk-flywheel --driver hard` against the fake bridge as a program (`otk-fake-bridge`): an ok run with its trace and budget (and its frame log on the bridge's clock when there is a CAN interface), an aborted run (exit 4), and a bridge that is not fresh, refused.
+- The hard driver's tests run in real time, so `ctest` runs them alone (`RUN_SERIAL`). The tests that use the CAN interface take it one at a time, because each would see the others' frames.
+- **[`tools/mutation_check.sh`](tools/mutation_check.sh)** breaks 72 behaviours that applications rely on (62 without a CAN interface), and the tests must catch each one. Six are the bridge codec's, five the hard driver's host side, fourteen its step loop's (two of them need a CAN interface). Eight are the links' faults (one per fault, plus the order rule and the filter), four the links' reports, six the frame log writer's and two `otk-flywheel`'s.

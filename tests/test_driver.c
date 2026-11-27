@@ -91,7 +91,8 @@ static void test_names(void) {
     OtkDriverKind k;
     CHECK(otk_driver_from_name("free-run", &k) && k == OTK_DRIVER_FREE_RUN);
     CHECK(otk_driver_from_name("paced", &k) && k == OTK_DRIVER_PACED);
-    CHECK(!otk_driver_from_name("hard", &k));
+    CHECK(otk_driver_from_name("hard", &k) && k == OTK_DRIVER_HARD);
+    CHECK(!otk_driver_from_name("virtual", &k)); /* Track R, not built */
     CHECK(strcmp(otk_driver_name(OTK_DRIVER_PACED), "paced") == 0);
     CHECK(strcmp(otk_driver_name(OTK_DRIVER_FREE_RUN), "free-run") == 0);
 }
