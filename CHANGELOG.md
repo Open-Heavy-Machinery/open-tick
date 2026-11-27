@@ -30,7 +30,12 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
   - `test_hard_can` on `vcan`;
   - `example_flywheel_hard`, with the fake as a program (`otk-fake-bridge`);
   - 14 more mutations, 72 in all.
-- `docs/measurements/2026-11-27-hard-loop/run.sh`: the board runs (60 s quiet and 60 s under load, H = 16, CAN on `vcan0`), each from a freshly programmed bridge. Not run yet.
+- `docs/measurements/2026-11-27-hard-loop/run.sh`: the board runs (60 s quiet and 60 s under load, H = 16, CAN on `vcan0`), each from a freshly programmed bridge.
+- **The step loop measured on the board** ([docs/measurements/2026-11-27-hard-loop/](docs/measurements/2026-11-27-hard-loop/); v0.4 exit criterion 3):
+  - both runs `ok`: no underrun, no late setpoint, every applied setpoint checked was the one sent, and the same plant trace byte for byte;
+  - quiet: round trip p50 902 µs, p99 1.09 ms, mapping bound 460 µs, CAN send error p99 401 µs;
+  - with every CPU busy: round trip p99 7.20 ms and CAN send error p99 5.09 ms, over their budget as stated;
+  - REALTIME → MONOTONIC 19.3 µs on the quiet host, over its 10 µs budget: one interrupted sample sets the whole run's bound (`rt_gap.c` measures how often).
 
 ### Changed
 

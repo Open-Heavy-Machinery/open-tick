@@ -135,14 +135,14 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - the Tang Nano 20K gateware is built and simulated against the codec, not yet run on a board ([gateware/tang_nano_20k/](gateware/tang_nano_20k/README.md));
 - the toolchain decision is taken: the open toolchain, pinned;
 - the hard driver's host side is built and measured on the board: link, clock mapping, exchanges scheduled against the BL616's cycle ([docs/measurements/2026-11-26-hard-driver/](docs/measurements/2026-11-26-hard-driver/)). With the host in C, H = 16 ms holds with every CPU busy, and H = 12 ms on a quiet host;
-- stepping a plant on the bridge's clock (the hard driver's step loop) and CAN on that clock are built and tested against a fake bridge and on `vcan`; `otk-flywheel --driver hard` runs on them. Not yet run on the board ([docs/measurements/2026-11-27-hard-loop/run.sh](docs/measurements/2026-11-27-hard-loop/run.sh) *(planned)*);
+- stepping a plant on the bridge's clock (the hard driver's step loop) and CAN on that clock are built and tested against a fake bridge and on `vcan`; `otk-flywheel --driver hard` runs on them, and has run on the board for 60 s with H = 16, quiet and with every CPU busy, without an underrun ([docs/measurements/2026-11-27-hard-loop/](docs/measurements/2026-11-27-hard-loop/));
 - the fidelity contract is not built.
 
 **Exit criteria**
 
 - [x] 1. Host-to-bridge latency and throughput are measured and documented before anything else depends on them. *[docs/bridge-protocol.md](docs/bridge-protocol.md#measured-link-bl616), with the reports, sources and raw-data checksums in [docs/measurements/2026-11-26-bl616/](docs/measurements/2026-11-26-bl616/): about 448 B each way per exchange of about 6 ms; round trip 0.26–6.2 ms depending on phase; clock mapping good to p99 45–85 µs; a 16 ms look-ahead held with every CPU busy on two hosts.*
 - [ ] 2. open-crank's own v0.4 exit criteria are met through open-tick: a reference engine-ECU firmware achieves crank synchronisation and holds a requested speed.
-- [ ] 3. A jitter and latency budget is stated, then measured in the trace of every hard run. *Stated in [docs/bridge-protocol.md §9](docs/bridge-protocol.md#9-the-budget-of-a-hard-run); every hard run writes its measurement next to its trace (`out.budget.csv`). The board runs that measure it are pending.*
+- [x] 3. A jitter and latency budget is stated, then measured in the trace of every hard run. *Stated in [docs/bridge-protocol.md §9](docs/bridge-protocol.md#9-the-budget-of-a-hard-run); every hard run writes its measurement next to its trace (`out.budget.csv`). Measured on the board in [docs/measurements/2026-11-27-hard-loop/](docs/measurements/2026-11-27-hard-loop/): on a quiet host every row is within budget except REALTIME → MONOTONIC (19.3 µs against 10 µs, one interrupted sample); with every CPU busy, the round trip and the CAN send error are over it, as stated.*
 - [ ] 4. The runner refuses a run whose requirements exceed the bridge, and names the signal that fails.
 
 ## v0.5: Profiles
