@@ -252,6 +252,14 @@ The core steps on the bridge's clock, and the plant runs H steps ahead of it ([d
 
 **Why H is in steps.** The default of 16 was measured at 1 ms steps. At the flywheel's 10 ms steps, 16 steps are 160 ms of lead, far more than the link needs (one exchange per 6 ms). The application picks H for its step.
 
+### 3.16 The fidelity contract (`fidelity.h`) *(v0.4)*
+
+The parser and checker of [docs/bridge-protocol.md §7](docs/bridge-protocol.md#7-the-fidelity-contract-version-1), in `core/`: a machine's file (what it requires) against a bridge's (what it guarantees). It returns the first signal that fails, with its line, the column and both numbers, for the runner to print. `otk-flywheel --fidelity` uses it before it opens the bridge.
+
+**Why the runner sets the lead and the delay.** They are H × step and one round trip more, so they belong to the run, not to the bridge; the bridge's file carries them for 1 ms steps as reference.
+
+**Why matching by direction and transport, not by name.** The bridge does not know the machine's signal names, and its channels of one kind are interchangeable: a machine row takes the next free one.
+
 ## 4. Consuming open-tick
 
 open-tick builds as a subproject, through `add_subdirectory` (a submodule or a sibling checkout) or `FetchContent`. As a subproject it builds only its libraries. Tests and examples are off unless the parent turns them on (`OTK_BUILD_TESTS`, `OTK_BUILD_EXAMPLES`).

@@ -306,6 +306,29 @@ mutate "hard loop: a wide REALTIME -> MONOTONIC read not read again" $LOOP \
     "for (unsigned t = 0u; t < OTK_RT_MONO_TRIES; t++) {" "for (unsigned t = 0u; t < 1u; t++) {"
 mutate "hard loop: the budget's within compares the wrong way" $LOOP \
     "fputs(measured <= declared ? \"yes\" : \"no\", fp);" "fputs(measured >= declared ? \"yes\" : \"no\", fp);"
+FID=core/src/fidelity.c
+mutate "fidelity: max_rate_hz compared the wrong way" $FID \
+    "met = req <= off;" "met = off <= req;"
+mutate "fidelity: logic_v need not be equal" $FID \
+    "met = req == off;" "met = req <= off;"
+mutate "fidelity: resolution, latency and jitter at the bound refused" $FID \
+    "met = off <= req;" "met = off < req;"
+mutate "fidelity: a requirement the bridge does not guarantee accepted" $FID \
+    "if (!have) {" "if (false) {"
+mutate "fidelity: from_dut latency without the DUT-to-plant delay" $FID \
+    "off = bridge->dut_to_plant_delay_ns + (b->has[c] ? b->value[c] : 0u);" "off = (b->has[c] ? b->value[c] : 0u);"
+mutate "fidelity: from_dut latency guaranteed without a declared delay" $FID \
+    "have = bridge->has_delay;" "have = true;"
+mutate "fidelity: a bridge row of the other direction matched" $FID \
+    "bridge->sig[bi].dir != m->dir ||" ""
+mutate "fidelity: a bridge row taken twice" $FID \
+    "taken[bi] = true;" "taken[bi] = false;"
+mutate "fidelity: logic_v decimals not scaled to millivolts" $FID \
+    "frac *= 10u;" "frac *= 1u;"
+mutate "flywheel: a refused fidelity check runs anyway" $FLYWHEEL \
+    "return v == OTK_FIDELITY_OK ? 0 : EXIT_FIDELITY;" "return 0;"
+mutate "flywheel: the fidelity delay leaves out the round trip" $FLYWHEEL \
+    "g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns + rtt_ns;" "g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns;"
 mutate "flywheel: an aborted hard run exits 0" $FLYWHEEL \
     "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : EXIT_ABORTED;" "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : 0;"
 if [[ $can_rc -eq 0 ]]; then

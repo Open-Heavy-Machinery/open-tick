@@ -294,11 +294,37 @@ oil_pressure,to_dut,analog,1000,,2000000,,3.3
   - the look-ahead H (`lead_ns`);
   - the DUT-to-plant delay (`dut_to_plant_delay_ns`, at most H plus one round trip);
   - the link the numbers were measured on (`link`, for example `bl616-3mbaud`).
+- **`logic_v`** is in volts, with up to three decimals (`3.3`, `5`, `1.25`). Other metadata keys, such as `source`, are for people and are ignored.
+
+**The check** (`opentick/fidelity.h`, in `core/`):
+- **Matching.** The bridge names its own channels (`capture0`, …), not the machine's signals. Each machine row takes, in file order, the next bridge row not yet taken with the same `direction` and `transport`. None left: refused.
+- **An empty machine cell** asks for nothing. **A machine cell against an empty bridge cell** is refused: not guaranteed.
+- **The comparisons:**
+
+  | Column | Within when |
+  |---|---|
+  | `max_rate_hz` | machine ≤ bridge |
+  | `resolution_ns`, `jitter_ns` | bridge ≤ machine |
+  | `latency_ns`, `to_dut` | the bridge row's ≤ machine |
+  | `latency_ns`, `from_dut` | the bridge's `dut_to_plant_delay_ns` + its row's `latency_ns` (empty counts 0) ≤ machine. No delay declared: not guaranteed |
+  | `logic_v` | equal |
+
+- **The first failure** is reported: machine rows in order, then columns in the header's order. The message names the signal, its line, the column and both numbers.
+- **The runner's own lead and delay.** `lead_ns` and `dut_to_plant_delay_ns` depend on H and the step, not on the bridge alone. A runner sets them for its run before checking: `lead_ns` = H × step, `dut_to_plant_delay_ns` = that plus the declared round trip (§9). The bridge's file gives them for 1 ms steps, as reference.
+
+**The runner:** `otk-flywheel --driver hard --fidelity <machine.csv> --bridge-fidelity <bridge.csv>` checks before it opens the bridge. A refusal prints the message, exits 5 and leaves the bridge untouched; a file it cannot read exits 2.
+
+**The Tang Nano 20K's file** is [`gateware/tang_nano_20k/fidelity.csv`](../gateware/tang_nano_20k/fidelity.csv). It holds only what was measured or follows from the clock. Everything else is left empty:
+- `crank` and `cam` up to 5800 Hz and 50 Hz of edges: the 60−2 wheel at 6000 rpm, counted by a NUCLEO-G431KB without a lost edge (open-crank's harness check, 2026-11-27);
+- six captures at 10 pulses a second each, the rate that check sends;
+- 37 ns of resolution: one tick of the 27 MHz clock;
+- 3.3 V: every header bank;
+- no jitter, no latency of its own, nothing for the analog outputs: not measured yet.
 
 ## 8. A hard run, in order
 
 1. **Load the bitstream.** Counters then start from zero (F-17). The host drains the UART until it is silent, because the BL616 prints a banner (F-18).
-2. **Configure:** the reply's capabilities are checked against the machine's fidelity file before anything runs (ROADMAP v0.4, exit criterion 4).
+2. **Configure:** the reply's capabilities (channels, tick) are checked against what the run needs. Before step 1, a runner given fidelity files checks the machine's against the bridge's (§7; ROADMAP v0.4, exit criterion 4), and a refused run never opens the bridge.
 3. **Fill the buffer:** an exchange with `first_step` 0 and H setpoints.
 4. **Start.** From then on, exchanges keep the buffer near H.
 5. **Calibrate the analog outputs**, if the application can report what the DUT reads.

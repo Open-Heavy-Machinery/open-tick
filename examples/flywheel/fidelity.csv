@@ -1,0 +1,4 @@
+# otk-fidelity 1; side=machine; source=otk-flywheel
+signal,direction,transport,max_rate_hz,resolution_ns,latency_ns,jitter_ns,logic_v
+wheel,to_dut,rotary,2900,100,,,3.3
+speed_analog,to_dut,analog,,,,,
