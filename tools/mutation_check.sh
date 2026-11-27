@@ -22,8 +22,27 @@
 #     unshare -rn sh -c 'ip link add dev vcan0 type vcan && ip link set vcan0 mtu 72 &&
 #                        ip link set up vcan0 && exec tools/mutation_check.sh'
 #
+# Each mutation's suite stops at the first failing test (ctest
+# --stop-on-failure), and that run's output names it: a killed mutation costs
+# only the tests up to the one that catches it. A survivor runs them all.
+#
+# OTK_MUTATION_SHARD=i/n runs only every n-th mutation, starting at the i-th
+# (0 <= i < n), so that n runners share the work (CI runs four). The union of
+# the n shards is the whole check; each shard prints its own count.
+#
 # Usage: tools/mutation_check.sh   (needs cmake, a C compiler, python3)
 set -euo pipefail
+
+shard_i=0
+shard_n=1
+if [[ -n ${OTK_MUTATION_SHARD:-} ]]; then
+    if [[ ! $OTK_MUTATION_SHARD =~ ^([0-9]+)/([1-9][0-9]*)$ ]] || (( BASH_REMATCH[1] >= BASH_REMATCH[2] )); then
+        echo "OTK_MUTATION_SHARD must be i/n with 0 <= i < n, not '$OTK_MUTATION_SHARD'" >&2
+        exit 2
+    fi
+    shard_i=${BASH_REMATCH[1]}
+    shard_n=${BASH_REMATCH[2]}
+fi
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d)
@@ -40,11 +59,16 @@ fi
 
 killed=0
 problems=0
+index=0 # every mutation, in order; this shard runs those with index % n == i
 
 # mutate <description> <file> <exact text> <replacement>
 mutate() {
     local what=$1 file=$2 from=$3 to=$4
-    local path="$WORK/$file"
+    local path="$WORK/$file" out
+    index=$((index + 1))
+    if (( (index - 1) % shard_n != shard_i )); then
+        return
+    fi
     cp "$path" "$path.orig"
     if ! python3 - "$path" "$from" "$to" <<'EOF'
 import sys
@@ -64,12 +88,13 @@ EOF
     if ! cmake --build "$WORK/build" -j >/dev/null 2>&1; then
         echo "NO BUILD  $what  (the mutation does not compile)"
         problems=$((problems + 1))
-    elif ctest "${CTEST_ARGS[@]}" >/dev/null 2>&1; then
+    elif out=$(ctest "${CTEST_ARGS[@]}" --stop-on-failure 2>&1); then
         echo "SURVIVED  $what"
         problems=$((problems + 1))
     else
-        failing=$( (ctest "${CTEST_ARGS[@]}" 2>/dev/null || true) | sed -n 's/^.*[0-9] - \([a-z0-9_]*\) (Failed).*$/\1/p' | tr '\n' ' ')
-        echo "killed    $what  [${failing% }]"
+        # the first test that failed; the run stopped there
+        failing=$(sed -n 's/^.*[0-9] - \([a-z0-9_]*\) (\(Failed\|Timeout\|SEGFAULT\|Subprocess aborted\|Child aborted\|Exception\)).*$/\1/p' <<<"$out" | head -1 || true)
+        echo "killed    $what  [${failing:-?}]"
         killed=$((killed + 1))
     fi
     mv "$path.orig" "$path"
@@ -251,5 +276,9 @@ mutate "hard: every reply counted as the next cycle" $HARD \
     "k[i] = k[i - 1] + nearbyint((double)(t[i] - t[i - 1]) / p1);" "k[i] = k[i - 1] + 1.0;"
 
 echo
-echo "$killed mutations killed, $problems problems"
+if (( shard_n > 1 )); then
+    echo "shard $shard_i/$shard_n: $killed mutations killed, $problems problems (of $index mutations in all)"
+else
+    echo "$killed mutations killed, $problems problems"
+fi
 [[ $problems -eq 0 ]]
