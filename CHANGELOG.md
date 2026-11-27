@@ -82,6 +82,10 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 ### Changed
 
 - CI: the mutation job sets up `vcan0` and runs with `OTK_MUTATION_NEED_CAN=1`, so the SocketCAN mutations always run there.
+- **A faster mutation check:**
+  - `tools/mutation_check.sh` stops each mutation's suite at the first failing test (`ctest --stop-on-failure`) and names it from that same run, instead of running the whole suite twice;
+  - `OTK_MUTATION_SHARD=i/n` runs one share of the mutations; CI runs four shards in parallel;
+  - CI skips the mutations on a pull request whose every change is Markdown or under `docs/`; `main` always runs them.
 
 ## [0.3.1] (2026-11-26): frame logs
 
