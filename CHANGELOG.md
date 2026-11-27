@@ -6,6 +6,7 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **`otk-hard-probe wires [--rpm R]`:** a harness check on the bridge. A hold run with the crank at R rpm and every capture channel on; at the end, per channel, the pulses captured and their widths, and the captures lost. Used by open-crank's Level 2 wiring check.
 - **The hard driver's step loop** (`host/include/opentick/host/hard_loop.h`; v0.4, step 4), Linux. The core steps on a bridge's clock, with the plant H steps ahead of it:
   - the run of `docs/bridge-protocol.md` §8: a bridge that is not freshly programmed is refused, the configuration and the bridge's capabilities are checked, the first H setpoints are sent, the bridge is started, and it is stopped in the application's last step;
   - one exchange per forwarding cycle, scheduled against it, with every setpoint computed since the last;
