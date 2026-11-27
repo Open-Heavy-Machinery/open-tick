@@ -19,6 +19,12 @@
  *                            setpoints; underruns and the lowest fill. With
  *                            --lead-ns the exchanges are locked, otherwise
  *                            back to back.
+ *   wires [--rpm R]          a harness check: hold (back to back) with the
+ *                            crank at R rpm (default 1500) and every capture
+ *                            channel enabled, active high; prints, per
+ *                            channel, how many pulses were captured and
+ *                            their widths. The DUT on the other end decides
+ *                            what it sends; this mode only reports.
  *
  * Every mode prints a summary; --csv writes every exchange
  * (t1_ns,t4_ns,t2_tick,t3_tick,late_ns,step,fill,underruns,error); late_ns is how
@@ -57,6 +63,39 @@ static Row rows[MAX_SAMPLES];
 static uint32_t baud_ = 3000000u;
 static uint64_t planned_; /* the planned send time of the next exchange, 0 when not scheduled */
 static uint64_t spin_ns_ = OTK_HARD_DEFAULT_SPIN_NS;
+static double rpm_ = 1500.0;
+static uint8_t capture_mask_ = 0x00u;
+static uint8_t n_capture_; /* the bridge's capture channels, from its configure reply */
+
+/* Captures per channel, for the wires mode. */
+typedef struct {
+    uint64_t n;
+    uint32_t width_min, width_max;
+    uint64_t width_sum;
+} CaptureTally;
+static CaptureTally tally_[8];
+static uint64_t capture_lost_;
+
+static void tally_captures(const OtkBridgeReply *d) {
+    for (unsigned i = 0; i < d->n_cap; i++) {
+        const OtkBridgeCapture *c = &d->cap[i];
+        if (c->channel >= 8u) {
+            continue;
+        }
+        CaptureTally *t = &tally_[c->channel];
+        if (t->n == 0u || c->width < t->width_min) {
+            t->width_min = c->width;
+        }
+        if (c->width > t->width_max) {
+            t->width_max = c->width;
+        }
+        t->width_sum += c->width;
+        t->n++;
+    }
+    if (d->error & OTK_BRIDGE_ERR_CAPTURE_OVERFLOW) {
+        capture_lost_ += d->error_count;
+    }
+}
 
 /* Waits for a planned send time; the exchange that follows logs how late it went out. */
 static void wait_send(uint64_t at) {
@@ -105,6 +144,7 @@ static int exchange(const OtkBridgeRequest *q, OtkBridgeReply *d) {
     if (r.type != (OTK_BRIDGE_EXCHANGE | OTK_BRIDGE_REPLY) || !otk_bridge_decode_reply(r.payload, r.len, d)) {
         return -1;
     }
+    tally_captures(d);
     if (n_rows < MAX_SAMPLES) {
         rows[n_rows++] = (Row){ r.t1, r.t4, d->t2, d->t3, planned_ ? (int64_t)(r.t1 - planned_) : 0, d->step, d->fill,
                                 d->underruns, d->error };
@@ -127,7 +167,7 @@ static int control(uint8_t type, const uint8_t *p, size_t len, OtkHardReply *r) 
 }
 
 static int configure(void) {
-    const OtkBridgeConfig c = { STEP_TICKS, 60u, 2u, 0u, 0u, 0x80000000u, 0x00u, 0x3Fu, 100u };
+    const OtkBridgeConfig c = { STEP_TICKS, 60u, 2u, 0u, 0u, 0x80000000u, capture_mask_, 0x3Fu, 100u };
     uint8_t p[32];
     const size_t len = otk_bridge_encode_configure(&c, p, sizeof(p));
     OtkHardReply r;
@@ -137,6 +177,7 @@ static int configure(void) {
         fprintf(stderr, "otk-hard-probe: configure failed\n");
         return -1;
     }
+    n_capture_ = d.n_capture;
     printf("bridge: tick %u Hz, %u captures, %u analog outputs of %u bits\n", d.tick_hz, d.n_capture, d.n_analog,
            d.analog_bits);
     return 0;
@@ -401,7 +442,7 @@ static int mode_locked(double seconds, double lead_ns) {
 static OtkBridgeSetpoint setpoint(uint32_t k) {
     OtkBridgeSetpoint sp;
     uint32_t inc = 0;
-    (void)otk_bridge_phase_inc(1500.0, TICK_HZ, &inc);
+    (void)otk_bridge_phase_inc(rpm_, TICK_HZ, &inc);
     sp.crank_phase_inc = inc;
     sp.analog[0] = (uint16_t)(k & 0xFFFFu); /* the step, so the applied setpoint can be checked */
     sp.analog[1] = otk_bridge_analog(0.25);
@@ -517,6 +558,25 @@ static int mode_hold(double seconds, unsigned h, double lead_ns) {
     return st.underruns == 0 ? 0 : 3;
 }
 
+static int mode_wires(double seconds) {
+    memset(tally_, 0, sizeof(tally_));
+    capture_lost_ = 0;
+    const int rc = mode_hold(seconds, OTK_HARD_DEFAULT_H, -1.0);
+    printf("wires: crank 60-2 at %.0f rpm, cam high for half of 720 degrees, %.1f s\n", rpm_, seconds);
+    for (unsigned k = 0; k < n_capture_ && k < 8u; k++) {
+        const CaptureTally *t = &tally_[k];
+        if (t->n == 0u) {
+            printf("  capture %u: 0 pulses\n", k);
+        } else {
+            printf("  capture %u: %llu pulses, width us min %.1f mean %.1f max %.1f\n", k, (unsigned long long)t->n,
+                   t->width_min * 1e6 / TICK_HZ, (double)t->width_sum / (double)t->n * 1e6 / TICK_HZ,
+                   t->width_max * 1e6 / TICK_HZ);
+        }
+    }
+    printf("  captures lost (bridge overflow): %llu\n", (unsigned long long)capture_lost_);
+    return rc;
+}
+
 int main(int argc, char **argv) {
     const char *dev = NULL, *csv_path = NULL, *mode = NULL;
     uint32_t baud = 3000000u;
@@ -532,6 +592,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--walk-ns") && v) { walk_ns = atof(v); i++; }
         else if (!strcmp(a, "--lead-ns") && v) { lead_ns = atof(v); i++; }
         else if (!strcmp(a, "--H") && v) { h = (unsigned)strtoul(v, NULL, 10); i++; }
+        else if (!strcmp(a, "--rpm") && v) { rpm_ = atof(v); i++; }
         else if (!strcmp(a, "--spin-us") && v) { spin_ns_ = (uint64_t)strtoull(v, NULL, 10) * 1000u; i++; }
         else if (a[0] != '-' && !mode) { mode = a; }
         else {
@@ -541,7 +602,7 @@ int main(int argc, char **argv) {
     }
     if (!dev || !mode) {
         fprintf(stderr, "usage: otk-hard-probe --dev <tty> [--baud B] [--seconds S] [--csv F] "
-                        "cycle | sweep [--walk-ns W] | locked --lead-ns L | hold --H N [--lead-ns L]\n");
+                        "cycle | sweep [--walk-ns W] | locked --lead-ns L | hold --H N [--lead-ns L] | wires [--rpm R]\n");
         return 2;
     }
     if (otk_hard_open(&link_, dev, baud) != 0) {
@@ -555,6 +616,9 @@ int main(int argc, char **argv) {
             return 2;
         }
         fprintf(csv, "t1_ns,t4_ns,t2_tick,t3_tick,late_ns,step,fill,underruns,error\n");
+    }
+    if (!strcmp(mode, "wires")) {
+        capture_mask_ = 0x3Fu;
     }
     const size_t banner = otk_hard_drain(&link_, 300000000u, 3000000000u);
     printf("drained %zu bytes before the first exchange\n", banner);
@@ -570,6 +634,8 @@ int main(int argc, char **argv) {
         rc = lead_ns < 0 ? 2 : mode_locked(seconds, lead_ns);
     } else if (!strcmp(mode, "hold")) {
         rc = mode_hold(seconds, h, lead_ns);
+    } else if (!strcmp(mode, "wires")) {
+        rc = mode_wires(seconds);
     } else {
         fprintf(stderr, "otk-hard-probe: unknown mode %s\n", mode);
         rc = 2;
