@@ -8,6 +8,7 @@
  *                  [--criteria examples/flywheel/step.accept.csv [--verdicts out.verdicts.csv]]
  *     otk-flywheel examples/flywheel/hard60.csv --driver hard --dev /dev/ttyUSB1 --trace out.csv
  *                  [--H 16] [--can vcan0 [--frames out.frames.csv]] [--budget out.budget.csv]
+ *                  [--fidelity examples/flywheel/fidelity.csv --bridge-fidelity gateware/tang_nano_20k/fidelity.csv]
  *                  [--bitstream-md5 MD5] [--commit SHA] [--allow-reused-bridge]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
@@ -46,6 +47,14 @@
  * code is 0 for ok, 3 for degraded (an underrun, a late setpoint) and 4 for
  * aborted (the link timed out).
  *
+ * --fidelity <machine.csv> --bridge-fidelity <bridge.csv> checks, before the
+ * bridge is opened, that the machine's fidelity contract is within what the
+ * bridge guarantees (docs/bridge-protocol.md §7; the Tang Nano 20K's is
+ * gateware/tang_nano_20k/fidelity.csv). The bridge's lead and DUT-to-plant
+ * delay are this run's: H x step, and that plus the declared round trip. A
+ * refusal names the signal and the column, exits 5 and leaves the bridge
+ * untouched.
+ *
  * This is an example, not an application: the plant is a first-order sketch
  * and the message set is made up. It exists to show the pieces together:
  * a signal table, a scenario, the player, CAN queues, a link, a trace and a
@@ -59,6 +68,7 @@
 #include <string.h>
 
 #include <opentick/can.h>
+#include <opentick/fidelity.h>
 #include <opentick/framelog.h>
 #include <opentick/host/driver.h>
 #include <opentick/host/hard_loop.h>
@@ -80,6 +90,7 @@
 #define FULL_SCALE_RPM 3000.0 /* analog output 0: the speed as a fraction of this */
 #define EXIT_DEGRADED 3
 #define EXIT_ABORTED 4
+#define EXIT_FIDELITY 5 /* --fidelity: the machine requires more than the bridge guarantees */
 
 /* ---- Signals the scenario can set ---------------------------------------- */
 
@@ -289,7 +300,55 @@ static void usage(void) {
                     "                   [--criteria <criteria.csv> [--verdicts <out.csv>]] [--frames <out.csv>]\n"
                     "                   [--seed <n>]   seed of the speed link's jitter (default 1)\n"
                     "       hard driver: --dev <tty> [--H <steps>] [--can <if>] [--budget <out.csv>]\n"
-                    "                   [--bitstream-md5 <md5>] [--commit <sha>] [--link <name>] [--allow-reused-bridge]\n");
+                    "                   [--bitstream-md5 <md5>] [--commit <sha>] [--link <name>] [--allow-reused-bridge]\n"
+                    "                   [--fidelity <machine.csv> --bridge-fidelity <bridge.csv>]\n");
+}
+
+/* ---- Fidelity (--fidelity) ------------------------------------------------- */
+
+static OtkFidelityFile g_fid_machine, g_fid_bridge; /* large: keep them off the stack */
+
+static bool read_fidelity(const char *path, OtkFidelityFile *f) {
+    static char text[65536];
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) {
+        fprintf(stderr, "otk-flywheel: cannot read %s: %s\n", path, strerror(errno));
+        return false;
+    }
+    const size_t n = fread(text, 1U, sizeof(text), fp);
+    const bool too_long = n == sizeof(text);
+    fclose(fp);
+    if (too_long) {
+        fprintf(stderr, "otk-flywheel: %s is longer than %zu bytes\n", path, sizeof(text) - 1U);
+        return false;
+    }
+    OtkFidelityError e;
+    if (!otk_fidelity_parse(text, n, f, &e)) {
+        fprintf(stderr, "otk-flywheel: %s, line %u%s%s: %s\n", path, e.line, e.column ? ", column " : "",
+                e.column ? e.column : "", e.what);
+        return false;
+    }
+    return true;
+}
+
+/* 0: within; EXIT_FIDELITY: refused; 2: a file could not be read. */
+static int check_fidelity(const char *machine_path, const char *bridge_path, unsigned h, uint64_t rtt_ns) {
+    if (!read_fidelity(machine_path, &g_fid_machine) || !read_fidelity(bridge_path, &g_fid_bridge)) {
+        return 2;
+    }
+    /* the lead and the delay are this run's (§7): H steps, and one round trip more */
+    g_fid_bridge.has_lead = g_fid_bridge.has_delay = true;
+    g_fid_bridge.lead_ns = (uint64_t)h * STEP_MS * 1000000U;
+    g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns + rtt_ns;
+    OtkFidelityResult r;
+    char msg[512];
+    const OtkFidelityVerdict v = otk_fidelity_check(&g_fid_machine, &g_fid_bridge, &r);
+    otk_fidelity_describe(&r, &g_fid_machine, &g_fid_bridge, msg, sizeof(msg));
+    fprintf(v == OTK_FIDELITY_OK ? stdout : stderr,
+            "otk-flywheel: %s (lead %llu ns, DUT-to-plant delay %llu ns: H = %u steps of %u ms)\n", msg,
+            (unsigned long long)g_fid_bridge.lead_ns, (unsigned long long)g_fid_bridge.dut_to_plant_delay_ns, h,
+            STEP_MS);
+    return v == OTK_FIDELITY_OK ? 0 : EXIT_FIDELITY;
 }
 
 /* ---- Frame log (--frames) --------------------------------------------------- */
@@ -493,6 +552,7 @@ int main(int argc, char **argv) {
     int quiet = 0;
     const char *dev = NULL, *can_if = NULL, *budget_path = NULL, *bitstream_md5 = NULL, *commit = NULL;
     const char *link_name = "bl616-3mbaud";
+    const char *fidelity_path = NULL, *bridge_fidelity_path = NULL;
     unsigned hard_h = OTK_HARD_DEFAULT_H;
     bool allow_reused = false;
     for (int i = 1; i < argc; i++) {
@@ -508,6 +568,10 @@ int main(int argc, char **argv) {
             commit = argv[++i];
         } else if (strcmp(argv[i], "--link") == 0 && i + 1 < argc) {
             link_name = argv[++i];
+        } else if (strcmp(argv[i], "--fidelity") == 0 && i + 1 < argc) {
+            fidelity_path = argv[++i];
+        } else if (strcmp(argv[i], "--bridge-fidelity") == 0 && i + 1 < argc) {
+            bridge_fidelity_path = argv[++i];
         } else if (strcmp(argv[i], "--allow-reused-bridge") == 0) {
             allow_reused = true;
         } else if (strcmp(argv[i], "--H") == 0 && i + 1 < argc) {
@@ -574,9 +638,21 @@ int main(int argc, char **argv) {
             budget_path_of(trace_path, budget_buf, sizeof(budget_buf));
             budget_path = budget_buf;
         }
-    } else if (dev != NULL || can_if != NULL || budget_path != NULL) {
-        fprintf(stderr, "otk-flywheel: --dev, --can and --budget belong to --driver hard\n");
+    } else if (dev != NULL || can_if != NULL || budget_path != NULL || fidelity_path != NULL ||
+               bridge_fidelity_path != NULL) {
+        fprintf(stderr, "otk-flywheel: --dev, --can, --budget and --fidelity belong to --driver hard\n");
         return 2;
+    }
+    if ((fidelity_path == NULL) != (bridge_fidelity_path == NULL)) {
+        fprintf(stderr, "otk-flywheel: --fidelity and --bridge-fidelity go together\n");
+        return 2;
+    }
+    if (fidelity_path != NULL) {
+        /* before the bridge is touched: a refused run never configures it */
+        const int rc = check_fidelity(fidelity_path, bridge_fidelity_path, hard_h, declared_budget().rtt_p99_ns);
+        if (rc != 0) {
+            return rc;
+        }
     }
 
     char err[600];

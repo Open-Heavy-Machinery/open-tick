@@ -6,6 +6,9 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **The fidelity contract's checker** (`core/include/opentick/fidelity.h`; v0.4 exit criterion 4), ISO C in `core/`, no allocation: parses version 1 files (§7) with the line and column of any error, matches each machine row to the next free bridge row of its direction and transport, and returns the first signal that fails, with its column and both numbers. A requirement the bridge leaves empty is refused. `test_fidelity`; eleven more mutations, 85 in all.
+- **`otk-flywheel --fidelity <machine.csv> --bridge-fidelity <bridge.csv>`** (with `--driver hard`): checked before the bridge is opened, with this run's lead and DUT-to-plant delay; a refusal exits 5. `examples/flywheel/fidelity.csv` is the flywheel's.
+- **`gateware/tang_nano_20k/fidelity.csv`**, the Tang Nano 20K's guarantees: only what was measured (crank to 5800 Hz and cam to 50 Hz at 6000 rpm, six captures at 10 Hz) or follows from its clock (37 ns) and banks (3.3 V).
 - **The hard driver's step loop** (`host/include/opentick/host/hard_loop.h`; v0.4, step 4), Linux. The core steps on a bridge's clock, with the plant H steps ahead of it:
   - the run of `docs/bridge-protocol.md` §8: a bridge that is not freshly programmed is refused, the configuration and the bridge's capabilities are checked, the first H setpoints are sent, the bridge is started, and it is stopped in the application's last step;
   - one exchange per forwarding cycle, scheduled against it, with every setpoint computed since the last;
