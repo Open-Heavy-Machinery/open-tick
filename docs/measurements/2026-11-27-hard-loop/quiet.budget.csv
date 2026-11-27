@@ -1,0 +1,24 @@
+# otk-hard-budget 1; result=ok; H=16; step_ns=10000000; margin_ns=600000; tick_hz=27000000; link=bl616-3mbaud; usb=3-2@480M; bitstream_md5=6659c249a3a8c779c0f7bb9cac6e6fa5; commit=1a3e3fc40388cb4f3af1c172d2ede3b3267969fc; source=otk-flywheel
+quantity,declared,measured,unit,within
+steps,,6000,steps,
+exchanges,,9003,exchanges,
+underruns,0,0,steps,yes
+late_setpoints,0,0,setpoints,yes
+applied_wrong,0,0,setpoints,yes
+applied_checked,,8998,setpoints,
+timeouts,,0,attempts,
+min_fill,,16,setpoints,
+plant_lead_ns,160000000,160000000,ns,yes
+rtt_p50_ns,,901903,ns,
+rtt_p99_ns,1300000,1089758,ns,yes
+rtt_max_ns,,6990264,ns,
+dut_to_plant_delay_ns,161300000,161089758,ns,yes
+mapping_bound_ns,500000,460321,ns,yes
+realtime_to_monotonic_err_ns,10000,19346,ns,no
+bus_clock_err_ns,510000,479667,ns,yes
+send_late_max_ns,,109710,ns,
+cycle_ns,,5999349,ns,
+can_frames,,6000,frames,
+can_tx_err_p50_ns,,348994,ns,
+can_tx_err_p99_ns,600000,400900,ns,yes
+can_tx_err_max_ns,,2678814,ns,

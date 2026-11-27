@@ -105,13 +105,19 @@ jobs:
       - name: Build
         run: |
           cmake -S . -B build -DOTK_WERROR=ON
-          cmake --build build -j --target test_socketcan
+          cmake --build build -j --target test_socketcan test_hard_can otk-flywheel otk-fake-bridge
       - name: Round trip classic and CAN FD frames
         if: steps.vcan.outputs.available == 'yes'
         run: ./build/tests/test_socketcan
+      - name: CAN on the bridge's clock (a synthetic mapping, then the hard loop against the fake bridge)
+        if: steps.vcan.outputs.available == 'yes'
+        run: ./build/tests/test_hard_can
+      - name: otk-flywheel --driver hard, its SPEED frames on vcan0 and its frame log on the bridge's clock
+        if: steps.vcan.outputs.available == 'yes'
+        run: tests/hard_flywheel.sh build tests/data/hard_short.csv build/hard_flywheel
       - name: Report that the bridge was not tested
         if: steps.vcan.outputs.available != 'yes'
-        run: echo "::warning::vcan is not available on this runner; the SocketCAN bridge was NOT tested"
+        run: echo "::warning::vcan is not available on this runner; the SocketCAN bridge and CAN on the bridge's clock were NOT tested"
 
   dependencies:
     name: dependency rule (core is ISO C; no application headers)

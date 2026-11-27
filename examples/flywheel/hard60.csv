@@ -1,0 +1,12 @@
+# otk-flywheel on the bridge's clock (--driver hard): 60 s of speed changes
+# and a load, with no transport fault, so that the run measures the hard
+# driver and nothing else. The bridge's rotary pattern and analog output 0
+# follow the flywheel's speed (docs/measurements/2026-11-27-hard-loop/).
+time_s,signal,value
+0.0,target_rpm,1500
+10.0,load_nm,0.3
+20.0,target_rpm,2400
+30.0,load_nm,0.6
+40.0,target_rpm,900
+50.0,load_nm,0.0
+60.0,end,0

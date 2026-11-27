@@ -6,6 +6,9 @@
  *     otk-flywheel examples/flywheel/step.csv [--driver free-run|paced] [--trace out.csv] [--quiet]
  *                  [--frames out.frames.csv] [--seed N]
  *                  [--criteria examples/flywheel/step.accept.csv [--verdicts out.verdicts.csv]]
+ *     otk-flywheel examples/flywheel/hard60.csv --driver hard --dev /dev/ttyUSB1 --trace out.csv
+ *                  [--H 16] [--can vcan0 [--frames out.frames.csv]] [--budget out.budget.csv]
+ *                  [--bitstream-md5 MD5] [--commit SHA] [--allow-reused-bridge]
  *
  * A DC motor spins a flywheel; a toy speed controller (the "device under
  * test") holds the speed the operator asks for. They talk CAN through
@@ -30,6 +33,19 @@
  * The same seed gives the same run, byte for byte; another seed gives other
  * draws. Without jitter the seed changes nothing.
  *
+ * --driver hard steps the flywheel on a signal-level bridge's clock
+ * (opentick/host/hard_loop.h, docs/bridge-protocol.md): the plant runs H steps
+ * ahead of the bridge, and every step's setpoint makes the bridge's rotary
+ * pattern turn at the flywheel's speed and its analog output 0 show that
+ * speed as a fraction of 3000 rpm. The controller still runs in memory. With
+ * --can, every SPEED frame also goes out on SocketCAN when the bridge begins
+ * its step (§5), and --frames then logs those frames on the bridge's clock
+ * (bus_clock=bridge), read back with the kernel's timestamps. Every hard run
+ * writes its budget file next to the trace (out.budget.csv for out.csv), or
+ * where --budget says: what was declared and what was measured. Its exit
+ * code is 0 for ok, 3 for degraded (an underrun, a late setpoint) and 4 for
+ * aborted (the link timed out).
+ *
  * This is an example, not an application: the plant is a first-order sketch
  * and the message set is made up. It exists to show the pieces together:
  * a signal table, a scenario, the player, CAN queues, a link, a trace and a
@@ -45,6 +61,8 @@
 #include <opentick/can.h>
 #include <opentick/framelog.h>
 #include <opentick/host/driver.h>
+#include <opentick/host/hard_loop.h>
+#include <opentick/host/socketcan.h>
 #include <opentick/link.h>
 #include <opentick/oracle.h>
 #include <opentick/player.h>
@@ -57,6 +75,11 @@
 #define ID_DUTY 0x200U
 #define PI 3.14159265358979323846
 #define LINK_SEED_DEFAULT 1U /* the speed link's PRNG (jitter); --seed changes it */
+#define TICK_HZ 27000000U    /* the Tang Nano 20K's oscillator */
+#define STEP_TICKS (STEP_MS * (TICK_HZ / 1000U))
+#define FULL_SCALE_RPM 3000.0 /* analog output 0: the speed as a fraction of this */
+#define EXIT_DEGRADED 3
+#define EXIT_ABORTED 4
 
 /* ---- Signals the scenario can set ---------------------------------------- */
 
@@ -262,9 +285,11 @@ static OtkScenario g_scenario;
 static OtkOracle g_oracle; /* large: keep it off the stack */
 
 static void usage(void) {
-    fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced] [--trace <out.csv>] [--quiet]\n"
+    fprintf(stderr, "usage: otk-flywheel <scenario.csv> [--driver free-run|paced|hard] [--trace <out.csv>] [--quiet]\n"
                     "                   [--criteria <criteria.csv> [--verdicts <out.csv>]] [--frames <out.csv>]\n"
-                    "                   [--seed <n>]   seed of the speed link's jitter (default 1)\n");
+                    "                   [--seed <n>]   seed of the speed link's jitter (default 1)\n"
+                    "       hard driver: --dev <tty> [--H <steps>] [--can <if>] [--budget <out.csv>]\n"
+                    "                   [--bitstream-md5 <md5>] [--commit <sha>] [--link <name>] [--allow-reused-bridge]\n");
 }
 
 /* ---- Frame log (--frames) --------------------------------------------------- */
@@ -302,6 +327,161 @@ static bool deliver_to_dut(OtkLink *link, OtkNs now, OtkCanFrame *out) {
     return false;
 }
 
+/* ---- The hard driver (--driver hard) ---------------------------------------- */
+
+/* What a hard run of this example is declared to hold on the Tang Nano 20K's
+ * BL616 link (docs/bridge-protocol.md, "Budget of a hard run"). Each run
+ * measures every row and writes both. */
+static OtkHardBudget declared_budget(void) {
+    OtkHardBudget b;
+    otk_hard_budget_none(&b);
+    b.underruns = 0U;
+    b.late = 0U;
+    b.rtt_p99_ns = 1300000U;       /* scheduled against the cycle, 600 us margin: p99 1.01 ms measured */
+    b.mapping_bound_ns = 500000U;  /* 385 us measured at that margin */
+    b.realtime_err_ns = 10000U;
+    b.can_tx_err_ns = 600000U;     /* the mapping's bound plus the sender's lateness on a quiet host */
+    return b;
+}
+
+static OtkHardLoop g_hard;
+static OtkSocketCan g_can;
+static bool g_can_on = false;
+static uint32_t g_sent_step[256]; /* bridge steps of the SPEED frames sent, until their echo is read */
+static size_t g_sent_head = 0U, g_sent_n = 0U;
+
+typedef struct {
+    OtkNs t, t_bus;
+    OtkFrameDir dir;
+    OtkCanFrame frame;
+} HardRow;
+static HardRow *g_rows = NULL; /* the frame log is written at the end, once its error is measured */
+static size_t g_nrows = 0U, g_caprows = 0U;
+static uint64_t *g_tx_err = NULL; /* |t_bus - t| of every SPEED frame read back */
+static size_t g_ntx = 0U, g_captx = 0U;
+static bool g_hard_oom = false;
+
+static void on_can_sent(void *ctx, const OtkHardCanSent *sent) {
+    (void)ctx;
+    if (sent->ok && g_sent_n < sizeof(g_sent_step) / sizeof(g_sent_step[0])) {
+        g_sent_step[(g_sent_head + g_sent_n) % 256U] = sent->step;
+        g_sent_n++;
+    }
+}
+
+static void *grow(void *p, size_t *cap, size_t n, size_t size) {
+    if (n < *cap) {
+        return p;
+    }
+    const size_t c = *cap ? 2U * *cap : 1024U;
+    void *q = realloc(p, c * size);
+    if (q == NULL) {
+        g_hard_oom = true;
+        return p;
+    }
+    *cap = c;
+    return q;
+}
+
+/* Reads what came back from the bus: our SPEED frames with the kernel's
+ * timestamps, and any other node's frames, all mapped onto the bridge. */
+static void hard_read_bus(uint32_t step_now) {
+    if (!g_can_on) {
+        return;
+    }
+    OtkCanFrame f;
+    OtkSocketCanRxInfo info;
+    while (otk_socketcan_recv_ex(&g_can, &f, &info) == 1) {
+        int64_t bus = 0;
+        const bool mapped = info.has_time && otk_hard_loop_bridge_ns_rt(&g_hard, info.time_ns, &bus) && bus >= 0;
+        HardRow r;
+        r.frame = f;
+        r.t_bus = mapped ? (OtkNs)bus : OTK_FRAMELOG_NO_TIME;
+        if (info.own) {
+            if (g_sent_n == 0U) {
+                continue;
+            }
+            const uint32_t step = g_sent_step[g_sent_head];
+            g_sent_head = (g_sent_head + 1U) % 256U;
+            g_sent_n--;
+            r.t = otk_ns_from_ms((uint64_t)step * STEP_MS);
+            r.dir = OTK_FRAME_TO_DUT;
+            if (mapped) {
+                g_tx_err = grow(g_tx_err, &g_captx, g_ntx, sizeof(uint64_t));
+                if (g_ntx < g_captx) {
+                    g_tx_err[g_ntx++] = r.t_bus > r.t ? r.t_bus - r.t : r.t - r.t_bus;
+                }
+            }
+        } else {
+            r.t = otk_ns_from_ms((uint64_t)step_now * STEP_MS);
+            r.dir = OTK_FRAME_FROM_DUT;
+        }
+        g_rows = grow(g_rows, &g_caprows, g_nrows, sizeof(HardRow));
+        if (g_nrows < g_caprows) {
+            g_rows[g_nrows++] = r;
+        }
+    }
+}
+
+static int cmp_u64(const void *a, const void *b) {
+    const uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+    return (x > y) - (x < y);
+}
+
+static OtkHardCanErr can_err(void) {
+    OtkHardCanErr e = { 0U, 0U, 0U, 0U };
+    if (g_ntx == 0U) {
+        return e;
+    }
+    qsort(g_tx_err, g_ntx, sizeof(uint64_t), cmp_u64);
+    e.n = g_ntx;
+    e.p50_ns = g_tx_err[(size_t)ceil(0.50 * (double)g_ntx) - 1U];
+    e.p99_ns = g_tx_err[(size_t)ceil(0.99 * (double)g_ntx) - 1U];
+    e.max_ns = g_tx_err[g_ntx - 1U];
+    return e;
+}
+
+static bool write_hard_frames(const char *path) {
+    const uint64_t err_ns = otk_hard_loop_bus_err_ns(&g_hard);
+    const OtkFrameLogConfig cfg = { otk_ns_from_ms(STEP_MS), OTK_BUS_CLOCK_BRIDGE, err_ns != UINT64_MAX,
+                                    err_ns == UINT64_MAX ? 0U : err_ns, "otk-flywheel" };
+    FILE *fp = fopen(path, "w");
+    OtkFrameLog log;
+    bool ok = fp != NULL && otk_framelog_init(&log, fp, &cfg);
+    for (size_t i = 0; ok && i < g_nrows; i++) {
+        const OtkFrameRow row = { g_rows[i].t, g_rows[i].t_bus, g_rows[i].dir, NULL, &g_rows[i].frame, OTK_FRAME_OK };
+        ok = otk_framelog_frame(&log, &row);
+    }
+    if (fp != NULL && !ok) {
+        fprintf(stderr, "otk-flywheel: frame log: %s\n", otk_framelog_error(&log));
+    }
+    if (fp == NULL || fclose(fp) != 0) {
+        ok = false;
+    }
+    return ok;
+}
+
+/* out.csv -> out.budget.csv; anything else gets .budget.csv appended. */
+static void budget_path_of(const char *trace, char *out, size_t cap) {
+    const size_t n = strlen(trace);
+    if (n > 4U && strcmp(trace + n - 4U, ".csv") == 0) {
+        snprintf(out, cap, "%.*s.budget.csv", (int)(n - 4U), trace);
+    } else {
+        snprintf(out, cap, "%s.budget.csv", trace);
+    }
+}
+
+static OtkBridgeSetpoint setpoint_of(double rpm) {
+    OtkBridgeSetpoint sp;
+    memset(&sp, 0, sizeof(sp));
+    uint32_t inc = 0U;
+    if (otk_bridge_phase_inc(rpm, TICK_HZ, &inc)) {
+        sp.crank_phase_inc = inc;
+    }
+    sp.analog[0] = otk_bridge_analog(rpm / FULL_SCALE_RPM);
+    return sp;
+}
+
 int main(int argc, char **argv) {
     const char *scenario_path = NULL;
     const char *trace_path = NULL;
@@ -311,8 +491,35 @@ int main(int argc, char **argv) {
     const char *frames_path = NULL;
     OtkDriverKind kind = OTK_DRIVER_FREE_RUN;
     int quiet = 0;
+    const char *dev = NULL, *can_if = NULL, *budget_path = NULL, *bitstream_md5 = NULL, *commit = NULL;
+    const char *link_name = "bl616-3mbaud";
+    unsigned hard_h = OTK_HARD_DEFAULT_H;
+    bool allow_reused = false;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--trace") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--dev") == 0 && i + 1 < argc) {
+            dev = argv[++i];
+        } else if (strcmp(argv[i], "--can") == 0 && i + 1 < argc) {
+            can_if = argv[++i];
+        } else if (strcmp(argv[i], "--budget") == 0 && i + 1 < argc) {
+            budget_path = argv[++i];
+        } else if (strcmp(argv[i], "--bitstream-md5") == 0 && i + 1 < argc) {
+            bitstream_md5 = argv[++i];
+        } else if (strcmp(argv[i], "--commit") == 0 && i + 1 < argc) {
+            commit = argv[++i];
+        } else if (strcmp(argv[i], "--link") == 0 && i + 1 < argc) {
+            link_name = argv[++i];
+        } else if (strcmp(argv[i], "--allow-reused-bridge") == 0) {
+            allow_reused = true;
+        } else if (strcmp(argv[i], "--H") == 0 && i + 1 < argc) {
+            const char *arg = argv[++i];
+            char *end = NULL;
+            const unsigned long v = strtoul(arg, &end, 10);
+            if (arg[0] < '0' || arg[0] > '9' || *end != '\0' || v == 0UL || v > OTK_HARD_MAX_H) {
+                fprintf(stderr, "otk-flywheel: --H takes 1 to %u steps, not '%s'\n", OTK_HARD_MAX_H, arg);
+                return 2;
+            }
+            hard_h = (unsigned)v;
+        } else if (strcmp(argv[i], "--trace") == 0 && i + 1 < argc) {
             trace_path = argv[++i];
         } else if (strcmp(argv[i], "--criteria") == 0 && i + 1 < argc) {
             criteria_path = argv[++i];
@@ -348,6 +555,29 @@ int main(int argc, char **argv) {
         usage(); /* the verdict file is the oracle's: it needs --criteria */
         return 2;
     }
+    const bool hard = kind == OTK_DRIVER_HARD;
+    char budget_buf[1024];
+    if (hard) {
+        if (dev == NULL) {
+            fprintf(stderr, "otk-flywheel: --driver hard needs --dev <tty>\n");
+            return 2;
+        }
+        if (budget_path == NULL && trace_path == NULL) {
+            fprintf(stderr, "otk-flywheel: a hard run writes its budget next to the trace: give --trace or --budget\n");
+            return 2;
+        }
+        if (frames_path != NULL && can_if == NULL) {
+            fprintf(stderr, "otk-flywheel: with --driver hard, --frames logs the CAN bus: it needs --can <if>\n");
+            return 2;
+        }
+        if (budget_path == NULL) {
+            budget_path_of(trace_path, budget_buf, sizeof(budget_buf));
+            budget_path = budget_buf;
+        }
+    } else if (dev != NULL || can_if != NULL || budget_path != NULL) {
+        fprintf(stderr, "otk-flywheel: --dev, --can and --budget belong to --driver hard\n");
+        return 2;
+    }
 
     char err[600];
     if (!otk_scenario_load(scenario_path, &SIGNALS, &g_scenario, err, sizeof(err))) {
@@ -375,7 +605,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (frames_path != NULL) {
+    if (frames_path != NULL && !hard) {
         /* In memory, both times are the simulation's: exact, so the error is 0. */
         const OtkFrameLogConfig cfg = { otk_ns_from_ms(STEP_MS), OTK_BUS_CLOCK_SIM, true, 0U, "otk-flywheel" };
         g_frames_fp = fopen(frames_path, "w");
@@ -408,13 +638,39 @@ int main(int argc, char **argv) {
 
     OtkDriver driver;
     otk_driver_init(&driver, kind, otk_ns_from_ms(STEP_MS));
+    if (hard) {
+        OtkHardLoopConfig hc;
+        otk_hard_loop_defaults(&hc, STEP_TICKS);
+        hc.h = hard_h;
+        hc.need_tick_hz = TICK_HZ;
+        hc.need_analog = 1U;
+        hc.require_fresh = !allow_reused;
+        if (otk_hard_loop_open(&g_hard, dev, &hc, err, sizeof(err)) != 0) {
+            fprintf(stderr, "otk-flywheel: %s: %s\n", dev, err);
+            return 1;
+        }
+        if (can_if != NULL) {
+            if (!otk_socketcan_open(&g_can, can_if) || !otk_socketcan_enable_timestamps(&g_can, true)) {
+                perror("otk-flywheel: cannot open the CAN interface with timestamps");
+                otk_hard_loop_free(&g_hard);
+                return 1;
+            }
+            g_can_on = true;
+            otk_hard_loop_attach_can(&g_hard, &g_can, on_can_sent, NULL);
+        }
+        otk_driver_attach_hard(&driver, &g_hard);
+        /* Bridge step k is simulated time k x 10 ms: step 0 holds the state at t = 0. */
+        const OtkBridgeSetpoint sp0 = setpoint_of(0.0);
+        otk_hard_loop_set(&g_hard, &sp0);
+        (void)otk_hard_loop_next(&g_hard);
+    }
     if (!quiet) {
         printf("otk-flywheel: %s, %s driver, until %.1f s\n", scenario_path, otk_driver_name(kind),
                otk_ns_to_s(g_scenario.end));
     }
 
     uint64_t dut_sent_ms = 0U; /* when the DUT sent what is in to_machine */
-    while (!otk_player_done(&player, otk_ns_from_ms(m.t_ms))) {
+    while (!otk_player_done(&player, otk_ns_from_ms(m.t_ms)) && !otk_driver_failed(&driver)) {
         otk_player_advance(&player, otk_ns_from_ms(m.t_ms));
         for (size_t i = 0; i < otk_can_queue_count(&to_machine); i++) {
             /* sent by the DUT in the last step, at the same simulated time */
@@ -452,7 +708,58 @@ int main(int argc, char **argv) {
                    (double)m.t_ms / 1000.0, m.target_rpm, rpm_of(&m), 100.0 * m.duty, m.load_nm,
                    DUT_STATE_NAMES[d.state]);
         }
+        if (hard) {
+            /* the bridge's step t / 10 ms: the crank turns at the flywheel's speed */
+            const uint32_t step = (uint32_t)(m.t_ms / STEP_MS);
+            const OtkBridgeSetpoint sp = setpoint_of(rpm_of(&m));
+            otk_hard_loop_set(&g_hard, &sp);
+            if (g_can_on && !m.speed_lost) {
+                const OtkCanFrame f = u16_frame(ID_SPEED, rpm_of(&m));
+                (void)otk_hard_loop_can_at(&g_hard, &f, step);
+            }
+            hard_read_bus(step);
+        }
         otk_driver_wait(&driver);
+    }
+
+    int hard_rc = 0;
+    if (hard) {
+        const OtkHardResult result = otk_hard_loop_stop(&g_hard);
+        otk_hard_sleep_until(otk_hard_now_ns() + 50000000U); /* the last frames' echoes */
+        hard_read_bus((uint32_t)(m.t_ms / STEP_MS));
+        if (g_can_on) {
+            otk_socketcan_close(&g_can);
+        }
+        char usb[256];
+        (void)otk_hard_usb_path(dev, usb, sizeof(usb));
+        const OtkHardBudget budget = declared_budget();
+        const OtkHardRunMeta meta = { link_name, usb, bitstream_md5, commit, "otk-flywheel" };
+        const OtkHardCanErr ce = can_err();
+        FILE *bf = fopen(budget_path, "w");
+        const bool written = bf != NULL && otk_hard_budget_write(bf, &g_hard, result, &budget, &meta, &ce);
+        if (bf == NULL || fclose(bf) != 0 || !written) {
+            fprintf(stderr, "otk-flywheel: cannot write the budget %s\n", budget_path);
+            hard_rc = 1;
+        }
+        if (frames_path != NULL && !write_hard_frames(frames_path)) {
+            hard_rc = 1;
+        }
+        const OtkHardStats *st = &g_hard.stats;
+        printf("otk-flywheel: hard run %s: %u bridge steps, %u underruns, %u late, %u timeouts; round trip p50 %.0f us, "
+               "p99 %.0f us; mapping bound %.1f us; REALTIME -> MONOTONIC %llu ns; budget in %s\n",
+               otk_hard_result_name(result), st->steps, st->underruns, st->late, st->timeouts,
+               (double)otk_hard_loop_rtt_pct(&g_hard, 50.0) / 1e3, (double)otk_hard_loop_rtt_pct(&g_hard, 99.0) / 1e3,
+               st->bound_max_ns / 1e3, (unsigned long long)otk_rt_mono_err_ns(&g_hard.rt), budget_path);
+        if (g_hard_oom) {
+            fprintf(stderr, "otk-flywheel: out of memory: the frame log or the CAN figures are incomplete\n");
+            hard_rc = 1;
+        }
+        if (hard_rc == 0) {
+            hard_rc = result == OTK_HARD_OK ? 0 : result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : EXIT_ABORTED;
+        }
+        otk_hard_loop_free(&g_hard);
+        free(g_rows);
+        free(g_tx_err);
     }
 
     printf("otk-flywheel: done at %.2f s, %llu steps, %.1f rpm, DUT %s", (double)m.t_ms / 1000.0,
@@ -506,5 +813,5 @@ int main(int argc, char **argv) {
         }
         printf("otk-flywheel: PASS (%zu of %zu criteria)\n", total, total);
     }
-    return 0;
+    return hard_rc;
 }

@@ -34,7 +34,7 @@ Where `t_bus_s` comes from (`bus_clock`):
 | `kernel` | SocketCAN, paced run | the kernel's timestamps (`SO_TIMESTAMPNS`), minus an anchor taken at t = 0 on the same clock (`otk_socketcan_clock_ns()`). A sent frame's time is that of the socket's own copy, which the kernel gives back when the frame leaves on the interface (`CAN_RAW_RECV_OWN_MSGS`). On a USB adapter this is when the frame reached or left the host, not when it was on the wire: the adapter's latency is in it | empty (not stated) unless the application measures it |
 | `host` | SocketCAN, paced run, without kernel timestamps | the host's clock when the application read or wrote the frame | empty unless measured |
 | `none` | a run that is not paced (free-run over SocketCAN) | always empty: wall time and simulated time are unrelated | empty |
-| `bridge` | *(planned, v0.4)* a hard bridge's own timestamps | on the bridge's oscillator, which is the run's clock in hard mode | the clock's resolution |
+| `bridge` | SocketCAN in a hard run (v0.4; `otk-flywheel --driver hard --can`) | the bridge's time since step 0, which is the run's clock in hard mode: each frame's kernel timestamp mapped REALTIME → MONOTONIC → bridge ([bridge-protocol.md §5](bridge-protocol.md#5-can-in-a-hard-run)). A sent frame's time is that of its own copy, as for `kernel` | the bound measured in that run: the clock mapping's largest bound plus the REALTIME → MONOTONIC step's error. Never a constant |
 
 `otk_socketcan_bus_clock()` gives `none`, `kernel` or `host` for a socket and a run. When a frame has no kernel timestamp although the file says `kernel`, its `t_bus_s` is empty: a file never mixes clocks.
 

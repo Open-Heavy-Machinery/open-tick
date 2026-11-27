@@ -1,0 +1,4 @@
+host load: 20 busy python3 loops (one per CPU), started before the run
+otk-flywheel: hard run ok: 6000 bridge steps, 0 underruns, 0 late, 0 timeouts; round trip p50 885 us, p99 7197 us; mapping bound 355.4 us; REALTIME -> MONOTONIC 502 ns; budget in load.budget.csv
+otk-flywheel: done at 60.00 s, 6000 steps, 899.8 rpm, DUT RUN
+exit=0

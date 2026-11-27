@@ -4,10 +4,11 @@
 - **Built:**
   - the codec, in [`core/include/opentick/bridge.h`](../core/include/opentick/bridge.h): framing, CRC, every payload, a parser that resynchronises, the unit conversions;
   - the Tang Nano 20K's gateware, in [`gateware/tang_nano_20k/`](../gateware/tang_nano_20k/README.md), simulated against that codec and run on the board;
-  - the hard driver's host side, in [`host/include/opentick/host/hard.h`](../host/include/opentick/host/hard.h): the serial link, the clock mapping, and the estimate of the link's forwarding cycle that exchanges are scheduled against (§4.1). `otk-hard-probe` measures with it.
+  - the hard driver's host side, in [`host/include/opentick/host/hard.h`](../host/include/opentick/host/hard.h): the serial link, the clock mapping, and the estimate of the link's forwarding cycle that exchanges are scheduled against (§4.1). `otk-hard-probe` measures with it;
+  - the hard driver inside open-tick's step loop, in [`host/include/opentick/host/hard_loop.h`](../host/include/opentick/host/hard_loop.h) and `otk-flywheel --driver hard`: the run of §8, the plant H steps ahead of the bridge, captures handed over with their step, and every run's budget file (§9);
+  - CAN on the bridge's clock (§5).
+  - Both are tested against a fake bridge on a pseudo-terminal and on `vcan`, and run on the board ([measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/), §9).
 - **Not built yet:**
-  - the hard driver inside open-tick's step loop, which steps a plant on the bridge's clock *(planned)*;
-  - CAN on the bridge's clock (§5) *(planned)*;
   - the fidelity contract's checker *(planned)*.
 
 It carries what crosses the USB link between the host, which runs the core and the plant, and a signal-level bridge, which produces and captures edges and levels on the pins of the device under test (DUT) ([VISION.md §5.2](../VISION.md#52-two-kinds-of-transport)). Message transports such as CAN stay on the host and do not use it.
@@ -249,7 +250,17 @@ CAN stays on the host (SocketCAN). In a hard run's frame log ([frame-log-format.
 - **`bus_clock=bridge`.** Every CAN frame's kernel timestamp is mapped REALTIME → MONOTONIC → bridge ticks, so CAN frames and captures share one timebase.
 - **`bus_clock_err_ns` is the bound measured in that run,** from its best samples and residuals, plus the REALTIME → MONOTONIC step. It is never a constant.
 - **Frames to the DUT go out when the bridge reaches their step, not when the host computes them.** The plant computes step k about H steps early. The host maps the start of step k (`t_start` + k × `step_ticks`) to `CLOCK_MONOTONIC` and sends the frame then. Sent at once, every frame would reach the DUT about H early: the paced loop's one-step lead (F-5), multiplied by H.
-- **Frames from the DUT reach the plant late.** A frame received at bridge time t is used by the first step the plant computes after it arrives, which is for about t + H. It is part of the DUT-to-plant delay that the fidelity contract declares ([§2](#2-look-ahead)).
+- **Frames from the DUT reach the plant late.** A frame received at bridge time t is used by the first step the plant computes after it arrives, which is for about t + H. It is part of the DUT-to-plant delay that the fidelity contract declares ([§2](#2-look-ahead)). Captures are handed over the same way, each with the bridge step it started in.
+
+**How the host does it** (`hard_loop.h`):
+- **Sending at a step.** A frame is queued with its step. The loop maps the step's start to `CLOCK_MONOTONIC` from the fast direction (§4.1) and sends the frame then, sleeping and then spinning as before an exchange.
+  - The host is blocked while it waits for an exchange's reply, for about the lead.
+  - A frame due in that window is sent at its time instead, and that exchange moves to the next forwarding cycle; never two cycles in a row, so the link is not starved.
+- **The frame log's `t_bus_s`** is the bridge's time since step 0: for a frame sent, its own echo's kernel timestamp (`CAN_RAW_RECV_OWN_MSGS`); for a frame received, its kernel timestamp. Each is mapped REALTIME → MONOTONIC → bridge.
+  - The mapping is the symmetric one of §4, as the bound is.
+  - **On an asymmetric link this shows.** The frames go out on time, aimed from the fast direction, but their `t_bus_s` is biased by about half the reply's wait: against a fake bridge with a BL616-like cycle, `t_bus_s − t_s` was about −0.5 ms, within `bus_clock_err_ns` (about 0.5–0.7 ms).
+- **REALTIME → MONOTONIC.** Each sample reads REALTIME, MONOTONIC and REALTIME again. Its offset is good to half the time between the two REALTIME reads, under 1 µs for almost every sample. Linux slews both clocks alike, so the offset moves only when REALTIME is stepped. The error published is therefore the largest half width, plus how far the offset moved during the run. One sample is taken per exchange.
+  - **One interrupted sample sets the whole run's error.** A sample whose two REALTIME reads are G apart adds about G: G/2 of half width, and up to G/2 of offset. On the board host, about 1 read in 10 000 is interrupted for 12–20 µs, and a quiet run measured 19.3 µs ([measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)).
 
 ## 6. Budget of one exchange (BL616)
 
@@ -300,6 +311,75 @@ oil_pressure,to_dut,analog,1000,,2000000,,3.3
 Every hard run records the USB path of the bridge (bus and ports, the hubs on the way, the link speed) in its trace's metadata. A bridge's link numbers hold for the topology they were measured on.
 
 The example's numbers are illustrative. Each machine and bridge writes its own; open-crank's come with its v0.4.
+
+**Exit codes** of a hard run in `otk-flywheel`: 0 ok, 3 degraded (an underrun, a late setpoint, or an applied setpoint that was not the one sent), 4 aborted (no reply after the retransmissions, or the bridge's link timeout). The run ends when the application's last step has begun on the bridge.
+- The last setpoint is queued again behind it, so a stop that arrives a step late finds a full buffer. It does not count an underrun the run did not have, and the bridge holds that setpoint either way.
+- The stop is sent half-way through that step.
+
+## 9. The budget of a hard run
+
+ROADMAP v0.4, exit criterion 3: a jitter and latency budget is stated, then measured in the trace of every hard run.
+
+**Stated** for the Tang Nano 20K's BL616 link at 3 Mbaud, exchanges scheduled with 600 µs of margin, H = 16 steps, on a quiet host:
+
+| Quantity | Budget | Why |
+|---|---|---|
+| Plant lead | H × step: 16 ms at 1 ms steps; 160 ms for `otk-flywheel` (10 ms steps) | §2 |
+| Underruns, late setpoints | 0 | §2: H = 16 held with every CPU busy (1 in 60 000 at 1 ms steps) |
+| Round trip p99 | ≤ 1.3 ms | 1.01 ms measured at that margin |
+| DUT-to-plant delay | ≤ H × step + 1.3 ms: 17.3 ms at 1 ms steps, 161.3 ms for `otk-flywheel` | §2 |
+| Clock mapping bound (§4, symmetric) | ≤ 500 µs | 385 µs measured at that margin: every reply waits about the lead |
+| REALTIME → MONOTONIC | ≤ 10 µs | §5 |
+| `bus_clock_err_ns` | ≤ 510 µs | the two above |
+| CAN send error p99 (\|`t_bus_s` − `t_s`\|) | ≤ 600 µs | the mapping's bound, plus the sender's lateness on a quiet host (p99 10–21 µs) |
+
+With every CPU busy, the sender wakes up to about 2 ms late (p99). The round trip and the CAN send error are then not expected to hold, and the run's budget file shows which rows did not.
+
+**Measured** in every hard run, and written next to its trace (`out.budget.csv` for `out.csv`):
+
+```
+# otk-hard-budget 1; result=ok; H=16; step_ns=10000000; margin_ns=600000; tick_hz=27000000; link=bl616-3mbaud; usb=3-2@480M; bitstream_md5=…; commit=…; source=otk-flywheel
+quantity,declared,measured,unit,within
+underruns,0,0,steps,yes
+rtt_p99_ns,1300000,1010000,ns,yes
+mapping_bound_ns,500000,385000,ns,yes
+…
+```
+
+- **Line 1, metadata:**
+  - `result`: `ok`, `degraded` or `aborted`;
+  - H and the margin;
+  - `link`, and the USB path as sysfs names it, with its speed (a hub on the way shows as a dot, for example `3-2.1`);
+  - the bitstream's md5 and the commit, as the runner gives them.
+- **Then one row per quantity:**
+  - `declared` empty when nothing is stated;
+  - `within` is `yes` or `no` when both values are there.
+- **The rows:**
+  - bridge steps, exchanges;
+  - underruns, late setpoints, applied setpoints checked and wrong, timeouts, the lowest buffer fill;
+  - the plant's lead, round trip p50/p99/max, the DUT-to-plant delay;
+  - the mapping's largest bound during the run, REALTIME → MONOTONIC, `bus_clock_err_ns`;
+  - the latest planned send, the forwarding cycle;
+  - with CAN: frames, and the CAN send error p50/p99/max.
+- The numbers in the example above are illustrative.
+
+**Measured on the board** (2026-11-27, [measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)): `otk-flywheel --driver hard`, 60 s (6000 steps of 10 ms), H = 16, CAN on `vcan0`, BL616 on a root port of host B, the bridge reprogrammed before each run. Rows above their budget are in bold.
+
+| Quantity | Budget | Quiet host | 20 busy loops |
+|---|---|---|---|
+| Result | | `ok` | `ok` |
+| Underruns, late setpoints, wrong applied setpoints | 0 | 0, 0, 0 | 0, 0, 0 |
+| Lowest buffer fill | | 16 | 15 |
+| Round trip p50 / p99 | p99 ≤ 1.3 ms | 902 µs / 1.09 ms | 885 µs / **7.20 ms** |
+| DUT-to-plant delay | ≤ 161.3 ms | 161.09 ms | **167.20 ms** |
+| Clock mapping bound | ≤ 500 µs | 460 µs | 355 µs |
+| REALTIME → MONOTONIC | ≤ 10 µs | **19.3 µs** | 0.5 µs |
+| `bus_clock_err_ns` | ≤ 510 µs | 480 µs | 356 µs |
+| CAN send error p50 / p99 | p99 ≤ 600 µs | 349 / 401 µs | 287 µs / **5.09 ms** |
+
+- Both runs held H, and the plant's trace is the same, byte for byte, in both.
+- Under load, the round trip and the CAN send error are over their budget, as stated above: the sender woke up to 5.6 ms late.
+- On the quiet host, REALTIME → MONOTONIC was over its budget because of one interrupted sample (§5). `bus_clock_err_ns` stayed within its own budget, because the mapping bound left room.
 
 ## Measured link (BL616)
 
@@ -373,15 +453,17 @@ Good samples came with gaps of up to 16 s.
 
   In every run, every reply's applied setpoint was the one sent for its step. On a quiet host, sends left 2–4 µs after their plan (p50; p99 10–21 µs). With every CPU busy, p99 was about 2 ms.
 
+**The hard driver's step loop, on the board** (2026-11-27, [measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)): `otk-flywheel --driver hard`, 10 ms steps, H = 16, on the same root port. Quiet: round trip p50 902 µs, p99 1.09 ms, mapping bound 460 µs, no underrun. With 20 busy loops: p50 885 µs, p99 7.20 ms, mapping bound 355 µs, no underrun. The budget, row by row, is in §9.
+
 **Throughput, from the first spike** (8 B echo, then paced bulk, 115 200 to 3 000 000 baud): the round trip is about 6 ms at every rate, and 3 375 000 baud does not run. With echo, where both directions run at once, at most about 64 B are in flight per round trip. That is the limit of echo, not of a ping-pong (F-13).
 
 ## Still open (to be measured, not decided)
 
-- **The error of the REALTIME → MONOTONIC step** for SocketCAN timestamps. Not measured yet.
 - **A lower H with a real-time sender.** Under full CPU load the C host's sends wake up to about 2 ms late. Running the hard driver with a real-time scheduling policy (`SCHED_FIFO`) needs the user's real-time priority limit raised, and is not measured.
 
 Measured and settled since the first version of this page:
 - a smaller H with a host in C: H = 12 ms on a quiet host, still 16 ms under full load;
-- regular low-delay samples, by scheduling exchanges against the cycle (§4.1).
+- regular low-delay samples, by scheduling exchanges against the cycle (§4.1);
+- the error of the REALTIME → MONOTONIC step on the board host: 0.5–19.3 µs per run, set by the rare interrupted sample (§5, §9).
 
 The F-numbers refer to the project's findings log, kept by the maintainers; the evidence for each is in [measurements/2026-11-26-bl616/](measurements/2026-11-26-bl616/).

@@ -1,0 +1,3 @@
+idle host, 10000 triple reads (REALTIME, MONOTONIC, REALTIME) 6 ms apart, two runs, 2026-11-27 19:37 JST:
+samples=10000 max_gap_ns=20200 offset_range_ns=10178  <1us=9988 1-2us=11 2-5us=0 5-10us=0 10-20us=0 >=20us=1
+samples=10000 max_gap_ns=12371 offset_range_ns=6233  <1us=9997 1-2us=1 2-5us=0 5-10us=0 10-20us=2 >=20us=0

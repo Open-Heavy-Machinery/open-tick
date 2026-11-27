@@ -6,6 +6,42 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Added
 
+- **The hard driver's step loop** (`host/include/opentick/host/hard_loop.h`; v0.4, step 4), Linux. The core steps on a bridge's clock, with the plant H steps ahead of it:
+  - the run of `docs/bridge-protocol.md` §8: a bridge that is not freshly programmed is refused, the configuration and the bridge's capabilities are checked, the first H setpoints are sent, the bridge is started, and it is stopped in the application's last step;
+  - one exchange per forwarding cycle, scheduled against it, with every setpoint computed since the last;
+  - every reply checked: underruns, late setpoints, the applied setpoint;
+  - captures extended to 64 bits and handed over with their step;
+  - a run's outcome, `ok`, `degraded` or `aborted`.
+- **`OTK_DRIVER_HARD`** in `driver.h`, with `otk_driver_attach_hard()` and `otk_driver_failed()`. The names are `free-run`, `paced` and `hard`.
+- **CAN on the bridge's clock** (§5):
+  - frames queued for a step go out when the bridge begins it;
+  - kernel timestamps are mapped REALTIME → MONOTONIC → bridge, and that step's error is measured in every run (`OtkRtMono`);
+  - frame logs with `bus_clock=bridge` and a measured `bus_clock_err_ns`.
+- **The budget of a hard run** (§9, v0.4 exit criterion 3):
+  - stated for the BL616 link;
+  - every hard run writes it next to its trace, declared and measured (`otk_hard_budget_write()`), with the USB path, the bitstream's md5 and the commit.
+- **`otk-flywheel --driver hard --dev <tty>`:**
+  - the flywheel's speed turns the bridge's rotary pattern and sets analog output 0;
+  - `--can <if>` sends its SPEED frames at their step, and `--frames` logs them on the bridge's clock;
+  - exit codes 0 ok, 3 degraded, 4 aborted;
+  - a 60 s scenario, `examples/flywheel/hard60.csv`.
+- **Tests without a board:**
+  - `test_hard_loop`, against a fake bridge on a pseudo-terminal (`tests/fake_bridge.c`);
+  - `test_hard_can` on `vcan`;
+  - `example_flywheel_hard`, with the fake as a program (`otk-fake-bridge`);
+  - 14 more mutations, 72 in all.
+- `docs/measurements/2026-11-27-hard-loop/run.sh`: the board runs (60 s quiet and 60 s under load, H = 16, CAN on `vcan0`), each from a freshly programmed bridge.
+- **The step loop measured on the board** ([docs/measurements/2026-11-27-hard-loop/](docs/measurements/2026-11-27-hard-loop/); v0.4 exit criterion 3):
+  - both runs `ok`: no underrun, no late setpoint, every applied setpoint checked was the one sent, and the same plant trace byte for byte;
+  - quiet: round trip p50 902 µs, p99 1.09 ms, mapping bound 460 µs, CAN send error p99 401 µs;
+  - with every CPU busy: round trip p99 7.20 ms and CAN send error p99 5.09 ms, over their budget as stated;
+  - REALTIME → MONOTONIC 19.3 µs on the quiet host, over its 10 µs budget: one interrupted sample sets the whole run's bound (`rt_gap.c` measures how often).
+
+### Changed
+
+- `docs/frame-log-format.md`: `bus_clock=bridge` is built; its `bus_clock_err_ns` is the bound measured in the run, not the clock's resolution.
+- `test_driver`: `hard` is now a driver name.
+
 - **The hard driver's host side** (`host/include/opentick/host/hard.h`; v0.4, step 3), Linux:
   - the serial link: one request, one reply, banner and stale replies skipped;
   - the clock mapping (§4), leaving out bins with no good sample;

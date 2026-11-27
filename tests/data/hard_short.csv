@@ -1,0 +1,6 @@
+# otk-flywheel --driver hard in the tests (tests/hard_flywheel.sh): 2 s
+# against the fake bridge, with a speed change, so that a run is short.
+time_s,signal,value
+0.0,target_rpm,1500
+1.0,target_rpm,2000
+2.0,end,0

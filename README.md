@@ -54,6 +54,13 @@ ctest --test-dir build --output-on-failure
 ./build/otk-flywheel examples/flywheel/jitter.csv --seed 2 --frames jitter.frames.csv         # SPEED jittered 0 to 30 ms; the seed picks the draws
 ```
 
+With a Tang Nano 20K running this repository's gateware, freshly programmed ([gateware/tang_nano_20k/](gateware/tang_nano_20k/README.md)), the same flywheel steps on the bridge's clock (v0.4, in progress). The bridge's crank pattern turns at the flywheel's speed, and the run writes `hard.budget.csv`, its budget declared and measured ([docs/bridge-protocol.md §9](docs/bridge-protocol.md#9-the-budget-of-a-hard-run)):
+
+```sh
+./build/otk-flywheel examples/flywheel/hard60.csv --driver hard --trace hard.csv \
+    --dev /dev/serial/by-id/usb-SIPEED_USB_Debugger_<serial>-if01-port0
+```
+
 ## Using it from an application
 
 ```cmake

@@ -57,6 +57,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         host/src/driver.c
         host/src/socketcan.c
         host/src/hard.c
+        host/src/hard_loop.c
     )
     add_library(opentick::host ALIAS opentick_host)
     target_include_directories(opentick_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/host/include)
