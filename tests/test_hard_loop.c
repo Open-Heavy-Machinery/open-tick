@@ -108,7 +108,10 @@ static void test_run_ok(void) {
     CHECK(wrong == 0u);
     /* the plant stayed about H ahead */
     CHECK(hl.stats.min_fill >= c.h - 3u && hl.stats.min_fill <= c.h + 2u);
-    CHECK(hl.have_cycle && fabs(hl.cycle_p - 2000000.0) < 2000.0);
+    /* the fake's thread wakes up late now and then, and its late replies tilt the fit: on a quiet host the
+     * period came out 1 µs off, with rarer tails past 2 µs. 20 µs (1 %) still tells a miscounted cycle
+     * from the right one, and an error of that size moves a send by microseconds against a 600 µs margin */
+    CHECK(hl.have_cycle && fabs(hl.cycle_p - 2000000.0) < 20000.0);
     CHECK(hl.stats.bound_max_ns > 0.0 && hl.stats.bound_max_ns < 2000000.0);
     CHECK(otk_hard_loop_rtt_pct(&hl, 50) > 0u && otk_hard_loop_rtt_pct(&hl, 99) < 5000000u);
     CHECK(hl.stats.seq_errors == 0u && hl.stats.timeouts == 0u);
