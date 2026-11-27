@@ -260,7 +260,9 @@ CAN stays on the host (SocketCAN). In a hard run's frame log ([frame-log-format.
   - The mapping is the symmetric one of §4, as the bound is.
   - **On an asymmetric link this shows.** The frames go out on time, aimed from the fast direction, but their `t_bus_s` is biased by about half the reply's wait: against a fake bridge with a BL616-like cycle, `t_bus_s − t_s` was about −0.5 ms, within `bus_clock_err_ns` (about 0.5–0.7 ms).
 - **REALTIME → MONOTONIC.** Each sample reads REALTIME, MONOTONIC and REALTIME again. Its offset is good to half the time between the two REALTIME reads, under 1 µs for almost every sample. Linux slews both clocks alike, so the offset moves only when REALTIME is stepped. The error published is therefore the largest half width, plus how far the offset moved during the run. One sample is taken per exchange.
-  - **One interrupted sample sets the whole run's error.** A sample whose two REALTIME reads are G apart adds about G: G/2 of half width, and up to G/2 of offset. On the board host, about 1 read in 10 000 is interrupted for 12–20 µs, and a quiet run measured 19.3 µs ([measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)).
+  - **An interrupted sample would set the whole run's error.** A sample whose two REALTIME reads are G apart adds about G: G/2 of half width, and up to G/2 of offset. On the board host, about 1 read in 10 000 is interrupted for 12–20 µs, and a quiet run measured 19.3 µs before the rule below ([measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)).
+  - **So a wide sample is read again, then dropped.** If the two REALTIME reads are more than 2 µs apart (`OTK_RT_MONO_MAX_WIDTH_NS`), the three reads are repeated, up to 3 tries in all. A sample still too wide, or one where REALTIME went back, is dropped and counted; the budget file's `realtime_to_monotonic_rejected` row says how many. The error published is then at most 1 µs of half width, plus how far the offset moved.
+  - **A real step of REALTIME still shows.** A step between two samples moves the offset. A step inside a sample makes that read too wide, and the next read has the new offset. Either way, the step is in the offset's range, and so in the error.
 
 ## 6. Budget of one exchange (BL616)
 
@@ -358,7 +360,7 @@ mapping_bound_ns,500000,385000,ns,yes
   - bridge steps, exchanges;
   - underruns, late setpoints, applied setpoints checked and wrong, timeouts, the lowest buffer fill;
   - the plant's lead, round trip p50/p99/max, the DUT-to-plant delay;
-  - the mapping's largest bound during the run, REALTIME → MONOTONIC, `bus_clock_err_ns`;
+  - the mapping's largest bound during the run, REALTIME → MONOTONIC and its samples dropped (§5), `bus_clock_err_ns`;
   - the latest planned send, the forwarding cycle;
   - with CAN: frames, and the CAN send error p50/p99/max.
 - The numbers in the example above are illustrative.
@@ -380,6 +382,25 @@ mapping_bound_ns,500000,385000,ns,yes
 - Both runs held H, and the plant's trace is the same, byte for byte, in both.
 - Under load, the round trip and the CAN send error are over their budget, as stated above: the sender woke up to 5.6 ms late.
 - On the quiet host, REALTIME → MONOTONIC was over its budget because of one interrupted sample (§5). `bus_clock_err_ns` stayed within its own budget, because the mapping bound left room.
+
+**Measured again with wide samples dropped** (2026-11-27, [measurements/2026-11-27-rt-mono/](measurements/2026-11-27-rt-mono/)): the same two runs, the same bitstream and root port, after the width rule of §5. Rows above their budget are in bold.
+
+| Quantity | Budget | Quiet host | 20 busy loops |
+|---|---|---|---|
+| Result | | `ok` | `ok` |
+| Underruns, late setpoints, wrong applied setpoints | 0 | 0, 0, 0 | 0, 0, 0 |
+| Lowest buffer fill | | 16 | 15 |
+| Round trip p50 / p99 | p99 ≤ 1.3 ms | 898 µs / 1.08 ms | 909 µs / **7.04 ms** |
+| DUT-to-plant delay | ≤ 161.3 ms | 161.08 ms | **167.04 ms** |
+| Clock mapping bound | ≤ 500 µs | 467 µs | **1 469 µs** |
+| REALTIME → MONOTONIC | ≤ 10 µs | 1.4 µs | 0.2 µs |
+| REALTIME → MONOTONIC samples dropped | | 0 | 0 |
+| `bus_clock_err_ns` | ≤ 510 µs | 468 µs | **1 469 µs** |
+| CAN send error p50 / p99 | p99 ≤ 600 µs | 351 / 389 µs | 298 µs / **5.01 ms** |
+
+- **On the quiet host, every row is within its budget.** REALTIME → MONOTONIC is 1.4 µs, against 19.3 µs before; no sample had to be dropped.
+- Both runs held H, and the plant's trace is byte for byte the one of the earlier runs.
+- **Under load, the clock mapping's bound went over its budget: 1 469 µs, against 355 µs in the earlier load run.** `bus_clock_err_ns` follows it. The width rule does not touch the mapping. The run's files give only the largest bound, not when it grew, so the cause is not known yet (Still open, below).
 
 ## Measured link (BL616)
 
@@ -453,17 +474,18 @@ Good samples came with gaps of up to 16 s.
 
   In every run, every reply's applied setpoint was the one sent for its step. On a quiet host, sends left 2–4 µs after their plan (p50; p99 10–21 µs). With every CPU busy, p99 was about 2 ms.
 
-**The hard driver's step loop, on the board** (2026-11-27, [measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)): `otk-flywheel --driver hard`, 10 ms steps, H = 16, on the same root port. Quiet: round trip p50 902 µs, p99 1.09 ms, mapping bound 460 µs, no underrun. With 20 busy loops: p50 885 µs, p99 7.20 ms, mapping bound 355 µs, no underrun. The budget, row by row, is in §9.
+**The hard driver's step loop, on the board** (2026-11-27, [measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)): `otk-flywheel --driver hard`, 10 ms steps, H = 16, on the same root port. Quiet: round trip p50 902 µs, p99 1.09 ms, mapping bound 460 µs, no underrun. With 20 busy loops: p50 885 µs, p99 7.20 ms, mapping bound 355 µs, no underrun. Repeated after REALTIME → MONOTONIC dropped its wide samples ([measurements/2026-11-27-rt-mono/](measurements/2026-11-27-rt-mono/)): quiet p99 1.08 ms, mapping bound 467 µs; loaded p99 7.04 ms, mapping bound 1 469 µs. The budget, row by row, is in §9.
 
 **Throughput, from the first spike** (8 B echo, then paced bulk, 115 200 to 3 000 000 baud): the round trip is about 6 ms at every rate, and 3 375 000 baud does not run. With echo, where both directions run at once, at most about 64 B are in flight per round trip. That is the limit of echo, not of a ping-pong (F-13).
 
 ## Still open (to be measured, not decided)
 
+- **The clock mapping's bound under full CPU load.** One load run measured 355 µs and the next 1 469 µs, against 500 µs stated for a quiet host (§9). The budget file records only the run's largest bound; when and why it grew is not measured.
 - **A lower H with a real-time sender.** Under full CPU load the C host's sends wake up to about 2 ms late. Running the hard driver with a real-time scheduling policy (`SCHED_FIFO`) needs the user's real-time priority limit raised, and is not measured.
 
 Measured and settled since the first version of this page:
 - a smaller H with a host in C: H = 12 ms on a quiet host, still 16 ms under full load;
 - regular low-delay samples, by scheduling exchanges against the cycle (§4.1);
-- the error of the REALTIME → MONOTONIC step on the board host: 0.5–19.3 µs per run, set by the rare interrupted sample (§5, §9).
+- the error of the REALTIME → MONOTONIC step on the board host: 0.5–19.3 µs per run, set by the rare interrupted sample; with wide samples dropped, 0.2–1.4 µs (§5, §9).
 
 The F-numbers refer to the project's findings log, kept by the maintainers; the evidence for each is in [measurements/2026-11-26-bl616/](measurements/2026-11-26-bl616/).

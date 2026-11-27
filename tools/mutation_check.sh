@@ -300,6 +300,10 @@ mutate "hard loop: aiming ignores the drift" $LOOP \
     "return (double)a->tick_hz / 1e9 * (1.0 + a->drift);" "return (double)a->tick_hz / 1e9;"
 mutate "hard loop: REALTIME -> MONOTONIC error leaves out how far the offset moved" $LOOP \
     "return m->half_width_max_ns + (uint64_t)(m->offset_max - m->offset_min);" "return m->half_width_max_ns;"
+mutate "hard loop: a wide REALTIME -> MONOTONIC sample accepted" $LOOP \
+    "return rt_after >= rt_before && rt_after - rt_before <= OTK_RT_MONO_MAX_WIDTH_NS;" "return rt_after >= rt_before;"
+mutate "hard loop: a wide REALTIME -> MONOTONIC read not read again" $LOOP \
+    "for (unsigned t = 0u; t < OTK_RT_MONO_TRIES; t++) {" "for (unsigned t = 0u; t < 1u; t++) {"
 mutate "hard loop: the budget's within compares the wrong way" $LOOP \
     "fputs(measured <= declared ? \"yes\" : \"no\", fp);" "fputs(measured >= declared ? \"yes\" : \"no\", fp);"
 mutate "flywheel: an aborted hard run exits 0" $FLYWHEEL \

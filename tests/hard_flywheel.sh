@@ -37,6 +37,7 @@ cat "$out/hard.txt"
 head -1 "$out/hard.budget.csv" | grep -q '^# otk-hard-budget 1; result=ok; H=16; step_ns=10000000;' || fail "budget metadata"
 grep -qx 'underruns,0,0,steps,yes' "$out/hard.budget.csv" || fail "budget: underruns"
 grep -qx 'plant_lead_ns,160000000,160000000,ns,yes' "$out/hard.budget.csv" || fail "budget: plant lead"
+grep -Eqx 'realtime_to_monotonic_rejected,,[0-9]+,samples,' "$out/hard.budget.csv" || fail "budget: REALTIME samples dropped"
 [[ $(wc -l < "$out/hard.csv") -gt 150 ]] || fail "the trace is short"
 if [[ ${#can[@]} -gt 0 ]]; then
     head -1 "$out/hard.frames.csv" | grep -q '; bus_clock=bridge; bus_clock_err_ns=[0-9][0-9]*;' || fail "frame log metadata"

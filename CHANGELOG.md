@@ -39,6 +39,8 @@ All notable changes to open-tick. The format follows [Keep a Changelog](https://
 
 ### Changed
 
+- **REALTIME → MONOTONIC drops its wide samples** (`docs/bridge-protocol.md` §5). A sample whose two REALTIME reads are more than 2 µs apart (`OTK_RT_MONO_MAX_WIDTH_NS`) is read again, up to 3 tries; one still too wide is dropped and counted (`OtkRtMono.rejected`, the budget's new row `realtime_to_monotonic_rejected`). A single interrupted read no longer sets the run's bound; a real step of REALTIME still does. The declared 10 µs is unchanged. `otk_rt_mono_add()` returns whether the sample was accepted, and `otk_rt_mono_sample_from()` takes a clock for tests. Two more mutations, 74 in all.
+  - Measured on the board again ([docs/measurements/2026-11-27-rt-mono/](docs/measurements/2026-11-27-rt-mono/)): REALTIME → MONOTONIC 1.4 µs quiet and 0.2 µs under load, no sample dropped; on the quiet host every row of the budget is within it. Under load, the clock mapping's bound measured 1 469 µs, over its 500 µs (355 µs in the earlier load run); not explained yet.
 - `docs/frame-log-format.md`: `bus_clock=bridge` is built; its `bus_clock_err_ns` is the bound measured in the run, not the clock's resolution.
 - `test_driver`: `hard` is now a driver name.
 

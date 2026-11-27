@@ -106,13 +106,23 @@ static uint64_t clock_ns(clockid_t id) {
     return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
 }
 
+static uint64_t system_clock(void *ctx, int id) {
+    (void)ctx;
+    return clock_ns((clockid_t)id);
+}
+
 void otk_rt_mono_init(OtkRtMono *m) {
     memset(m, 0, sizeof(*m));
 }
 
-void otk_rt_mono_add(OtkRtMono *m, uint64_t rt_before, uint64_t mono, uint64_t rt_after) {
-    if (rt_after < rt_before) {
-        return; /* REALTIME stepped back between the reads: not a sample */
+static bool rt_mono_narrow(uint64_t rt_before, uint64_t rt_after) {
+    return rt_after >= rt_before && rt_after - rt_before <= OTK_RT_MONO_MAX_WIDTH_NS;
+}
+
+bool otk_rt_mono_add(OtkRtMono *m, uint64_t rt_before, uint64_t mono, uint64_t rt_after) {
+    if (!rt_mono_narrow(rt_before, rt_after)) {
+        m->rejected++; /* interrupted, or REALTIME stepped between the reads: not a sample */
+        return false;
     }
     const uint64_t half = (rt_after - rt_before) / 2u;
     const int64_t off = (int64_t)(rt_before + half - mono);
@@ -133,13 +143,27 @@ void otk_rt_mono_add(OtkRtMono *m, uint64_t rt_before, uint64_t mono, uint64_t r
         m->half_width_max_ns = hw;
     }
     m->samples++;
+    return true;
+}
+
+void otk_rt_mono_sample_from(OtkRtMono *m, OtkRtMonoClock read, void *ctx) {
+    uint64_t a = 0u, b = 0u, c = 0u;
+    for (unsigned t = 0u; t < OTK_RT_MONO_TRIES; t++) {
+        if (t > 0u) {
+            m->retries++;
+        }
+        a = read(ctx, CLOCK_REALTIME);
+        b = read(ctx, CLOCK_MONOTONIC);
+        c = read(ctx, CLOCK_REALTIME);
+        if (rt_mono_narrow(a, c)) {
+            break;
+        }
+    }
+    (void)otk_rt_mono_add(m, a, b, c); /* the last read; dropped and counted if still too wide */
 }
 
 void otk_rt_mono_sample(OtkRtMono *m) {
-    const uint64_t a = clock_ns(CLOCK_REALTIME);
-    const uint64_t b = clock_ns(CLOCK_MONOTONIC);
-    const uint64_t c = clock_ns(CLOCK_REALTIME);
-    otk_rt_mono_add(m, a, b, c);
+    otk_rt_mono_sample_from(m, system_clock, NULL);
 }
 
 uint64_t otk_rt_mono_to_mono(const OtkRtMono *m, uint64_t rt_ns) {
@@ -802,6 +826,7 @@ bool otk_hard_budget_write(FILE *fp, const OtkHardLoop *l, OtkHardResult result,
         p99 == UINT64_MAX ? UINT64_MAX : lead_ns + p99, "ns");
     row(fp, "mapping_bound_ns", declared->mapping_bound_ns, ceil_u64(l->stats.bound_max_ns), "ns");
     row(fp, "realtime_to_monotonic_err_ns", declared->realtime_err_ns, otk_rt_mono_err_ns(&l->rt), "ns");
+    row(fp, "realtime_to_monotonic_rejected", UINT64_MAX, l->rt.rejected, "samples");
     row(fp, "bus_clock_err_ns", declared->mapping_bound_ns == UINT64_MAX || declared->realtime_err_ns == UINT64_MAX
                                     ? UINT64_MAX
                                     : declared->mapping_bound_ns + declared->realtime_err_ns,
