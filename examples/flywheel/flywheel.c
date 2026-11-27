@@ -746,10 +746,11 @@ int main(int argc, char **argv) {
         }
         const OtkHardStats *st = &g_hard.stats;
         printf("otk-flywheel: hard run %s: %u bridge steps, %u underruns, %u late, %u timeouts; round trip p50 %.0f us, "
-               "p99 %.0f us; mapping bound %.1f us; REALTIME -> MONOTONIC %llu ns; budget in %s\n",
+               "p99 %.0f us; mapping bound %.1f us; REALTIME -> MONOTONIC %llu ns (%llu samples dropped); budget in %s\n",
                otk_hard_result_name(result), st->steps, st->underruns, st->late, st->timeouts,
                (double)otk_hard_loop_rtt_pct(&g_hard, 50.0) / 1e3, (double)otk_hard_loop_rtt_pct(&g_hard, 99.0) / 1e3,
-               st->bound_max_ns / 1e3, (unsigned long long)otk_rt_mono_err_ns(&g_hard.rt), budget_path);
+               st->bound_max_ns / 1e3, (unsigned long long)otk_rt_mono_err_ns(&g_hard.rt),
+               (unsigned long long)g_hard.rt.rejected, budget_path);
         if (g_hard_oom) {
             fprintf(stderr, "otk-flywheel: out of memory: the frame log or the CAN figures are incomplete\n");
             hard_rc = 1;

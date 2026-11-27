@@ -285,8 +285,8 @@ static void test_rt_mono(void) {
     otk_rt_mono_add(&m, 3000000u, 2000000u, 3000020u); /* offset 1 000 010: NTP moved it 310 ns */
     CHECK(otk_rt_mono_err_ns(&m) == 100u + 310u);
     CHECK(otk_rt_mono_to_mono(&m, 5000010u) == 4000000u);
-    otk_rt_mono_add(&m, 5000u, 1u, 4000u); /* REALTIME went back: not a sample */
-    CHECK(m.samples == 3u);
+    CHECK(!otk_rt_mono_add(&m, 5000u, 1u, 4000u)); /* REALTIME went back: not a sample */
+    CHECK(m.samples == 3u && m.rejected == 1u);
     /* the real clocks */
     OtkRtMono r;
     otk_rt_mono_init(&r);
@@ -294,6 +294,62 @@ static void test_rt_mono(void) {
         otk_rt_mono_sample(&r);
     }
     CHECK(r.have && otk_rt_mono_err_ns(&r) < 1000000u);
+}
+
+/* A scripted clock: each read returns the next value, whichever clock it is. */
+typedef struct {
+    const uint64_t *v;
+    size_t n, i;
+} ScriptClock;
+
+static uint64_t script_read(void *ctx, int id) {
+    (void)id;
+    ScriptClock *c = ctx;
+    CHECK(c->i < c->n);
+    return c->i < c->n ? c->v[c->i++] : 0u;
+}
+
+static void test_rt_mono_width(void) {
+    /* a wide sample (19.3 us, like the one interrupted read of F-39) is dropped,
+     * and the bound does not see it */
+    OtkRtMono m;
+    otk_rt_mono_init(&m);
+    CHECK(otk_rt_mono_add(&m, 1000000u, 400u, 1000200u)); /* offset 999 700, half width 100 */
+    CHECK(!otk_rt_mono_add(&m, 2000000u, 1000000u, 2019300u));
+    CHECK(m.samples == 1u && m.rejected == 1u && otk_rt_mono_err_ns(&m) == 100u);
+    /* the limit itself is accepted */
+    CHECK(otk_rt_mono_add(&m, 3000000u, 3000000u + OTK_RT_MONO_MAX_WIDTH_NS / 2u - 999700u,
+                          3000000u + OTK_RT_MONO_MAX_WIDTH_NS));
+    CHECK(!otk_rt_mono_add(&m, 4000000u, 2999700u, 4000000u + OTK_RT_MONO_MAX_WIDTH_NS + 1u));
+    CHECK(m.samples == 2u && m.rejected == 2u && otk_rt_mono_err_ns(&m) == OTK_RT_MONO_MAX_WIDTH_NS / 2u);
+
+    /* one wide read is read again: the second, narrow one is the sample */
+    const uint64_t retry[] = {1000000u, 400u, 1019300u, 2000000u, 1000300u, 2000200u};
+    ScriptClock c = {retry, 6u, 0u};
+    otk_rt_mono_init(&m);
+    otk_rt_mono_sample_from(&m, script_read, &c);
+    CHECK(c.i == 6u && m.samples == 1u && m.retries == 1u && m.rejected == 0u);
+    CHECK(m.offset_ns == 999800 && otk_rt_mono_err_ns(&m) == 100u);
+
+    /* three wide reads in a row: dropped and counted once */
+    const uint64_t wide[] = {0u, 0u, 5000u, 10000u, 0u, 15000u, 20000u, 0u, 25000u};
+    c = (ScriptClock){wide, 9u, 0u};
+    otk_rt_mono_sample_from(&m, script_read, &c);
+    CHECK(c.i == 9u && m.samples == 1u && m.retries == 3u && m.rejected == 1u && otk_rt_mono_err_ns(&m) == 100u);
+
+    /* a step of REALTIME still shows in the bound: between samples ... */
+    const uint64_t step[] = {3000000u, 2000000u, 3000200u, 4005000u, 3000000u, 4005200u};
+    c = (ScriptClock){step, 6u, 0u};
+    otk_rt_mono_sample_from(&m, script_read, &c); /* offset 1 000 100 */
+    otk_rt_mono_sample_from(&m, script_read, &c); /* offset 1 005 100: REALTIME stepped 5 us */
+    CHECK(m.samples == 3u && m.rejected == 1u);
+    CHECK(otk_rt_mono_err_ns(&m) == 100u + (1005100u - 999800u));
+    /* ... and inside one: that read is too wide, the next one has the new offset */
+    const uint64_t inside[] = {5000000u, 4000000u, 1005000200u, 1005000000u, 4000100u, 1005000200u};
+    c = (ScriptClock){inside, 6u, 0u};
+    otk_rt_mono_sample_from(&m, script_read, &c); /* offset 1 001 000 000 */
+    CHECK(m.samples == 4u && m.retries == 4u && m.rejected == 1u);
+    CHECK(otk_rt_mono_err_ns(&m) == 100u + (1001000000u - 999800u));
 }
 
 static void test_usb_path(void) {
@@ -316,6 +372,7 @@ static void test_driver_names(void) {
 int main(void) {
     RUN_TEST(test_aim);
     RUN_TEST(test_rt_mono);
+    RUN_TEST(test_rt_mono_width);
     RUN_TEST(test_usb_path);
     RUN_TEST(test_driver_names);
     RUN_TEST(test_refuses_a_bad_h);

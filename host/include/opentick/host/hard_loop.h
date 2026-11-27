@@ -134,22 +134,43 @@ typedef struct {
  *        middle of the two REALTIME reads minus MONOTONIC) good to half its
  *        width. The offset can move during a run (NTP slews REALTIME), so the
  *        error is the largest half width plus how far the offset moved.
+ *
+ *        A sample whose two REALTIME reads are more than
+ *        OTK_RT_MONO_MAX_WIDTH_NS apart was interrupted (or REALTIME stepped
+ *        inside it). It is read again, up to OTK_RT_MONO_TRIES times in all; one
+ *        still too wide is dropped and counted in `rejected`, so a single
+ *        preempted read cannot set the whole run's bound (§5).
  */
+#define OTK_RT_MONO_MAX_WIDTH_NS 2000u
+#define OTK_RT_MONO_TRIES 3u
+
 typedef struct {
     bool have;
     int64_t offset_ns;     /**< REALTIME - MONOTONIC, from the latest sample */
     int64_t offset_min, offset_max;
     uint64_t half_width_max_ns;
-    uint64_t samples;
+    uint64_t samples;      /**< accepted */
+    uint64_t retries;      /**< reads repeated because the previous one was too wide */
+    uint64_t rejected;     /**< dropped: still too wide after every try, or REALTIME went back */
 } OtkRtMono;
 
 void otk_rt_mono_init(OtkRtMono *m);
 
-/** @brief Takes one sample now. */
+/** @brief Takes one sample now (up to OTK_RT_MONO_TRIES reads). */
 void otk_rt_mono_sample(OtkRtMono *m);
 
-/** @brief Adds a sample read elsewhere (REALTIME before, MONOTONIC, REALTIME after); for tests. */
-void otk_rt_mono_add(OtkRtMono *m, uint64_t rt_before, uint64_t mono, uint64_t rt_after);
+/** @brief Reads a clock, ns; `id` is CLOCK_REALTIME or CLOCK_MONOTONIC. */
+typedef uint64_t (*OtkRtMonoClock)(void *ctx, int id);
+
+/** @brief otk_rt_mono_sample() on other clocks; for tests. */
+void otk_rt_mono_sample_from(OtkRtMono *m, OtkRtMonoClock read, void *ctx);
+
+/**
+ * @brief Adds a sample read elsewhere (REALTIME before, MONOTONIC, REALTIME
+ *        after), with the same width rule; for tests. Returns whether it was
+ *        accepted.
+ */
+bool otk_rt_mono_add(OtkRtMono *m, uint64_t rt_before, uint64_t mono, uint64_t rt_after);
 
 /** @brief A REALTIME time on CLOCK_MONOTONIC. */
 uint64_t otk_rt_mono_to_mono(const OtkRtMono *m, uint64_t rt_ns);
