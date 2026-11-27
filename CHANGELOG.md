@@ -2,7 +2,9 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## [Unreleased]
+## [0.4.0-beta.1] (2026-11-28): the Tang Nano 20K bridge, before Level 2's ECU
+
+A pre-release: v0.4's exit criteria 1, 3 and 4 are met, and criterion 2 (a reference engine-ECU firmware on open-crank, through this bridge) is open. It is tagged so that open-crank's Level 2 work can pin the hard driver; v0.4.0 follows when criterion 2 is met.
 
 ### Added
 

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
-project(open-tick VERSION 0.3.1 LANGUAGES C)
+project(open-tick VERSION 0.4.0 LANGUAGES C)
+# Pre-release label of this version, empty for a release (the tag is v<version>[-<label>]).
+set(OTK_VERSION_PRERELEASE "beta.1")
 
 # open-tick builds on its own (tests, examples, CI) and as a subproject of an
 # application, through add_subdirectory() or FetchContent. As a subproject it

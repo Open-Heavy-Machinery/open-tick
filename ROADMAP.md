@@ -14,7 +14,7 @@ Scope is deliberately narrow, as in open-crank. Each milestone is small enough t
 | **v0.2.1** (done) | Verdict files: the oracle's verdicts drawn over the trace | open-crank v0.3 |
 | **v0.3** (done) | Transport faults | open-crank v0.3 |
 | **v0.3.1** (done) | Frame logs: every frame of a run, with logical and bus time | open-rig v0.3 (bus view) |
-| **v0.4** | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
+| **v0.4** (beta.1: criteria 1, 3, 4) | Tang Nano 20K bridge, hard driver, fidelity contract v1 | open-crank v0.4 |
 | **v0.5** | Profiles: YAML compiled to C | open-crank v0.5 |
 | **Track R** | Renode virtual-time driver (parallel) | open-crank Track R |
 | **When a sibling starts** | open-robots in SIL, Raspberry Pi Pico bridge, register-mapped slaves | open-robots |
@@ -130,13 +130,13 @@ Out of scope: a real bus-off, error frames, arbitration and bus load.
 - Fidelity contract, version 1: machines declare requirements, the bridge declares guarantees, and the runner checks them before a run.
 - Tang Nano 20K gateware; the toolchain decision (VISION.md, open question 3) is taken here.
 
-**Status:**
+**Status:** pre-release `v0.4.0-beta.1` (2026-11-28): exit criteria 1, 3 and 4 are met; criterion 2 waits for open-crank's Level 2 ECU.
 - the host-to-bridge protocol, version 1, is specified ([docs/bridge-protocol.md](docs/bridge-protocol.md)), and its codec is in `core/` (`opentick/bridge.h`);
-- the Tang Nano 20K gateware is built and simulated against the codec, not yet run on a board ([gateware/tang_nano_20k/](gateware/tang_nano_20k/README.md));
+- the Tang Nano 20K gateware is built, simulated against the codec, and runs on the board in every measurement below ([gateware/tang_nano_20k/](gateware/tang_nano_20k/README.md)). Its crank, cam and six captures were checked wire by wire against a NUCLEO-G431KB (open-crank's Level 2 harness check, `otk-hard-probe wires`); its analog outputs are not yet measured on a board;
 - the toolchain decision is taken: the open toolchain, pinned;
 - the hard driver's host side is built and measured on the board: link, clock mapping, exchanges scheduled against the BL616's cycle ([docs/measurements/2026-11-26-hard-driver/](docs/measurements/2026-11-26-hard-driver/)). With the host in C, H = 16 ms holds with every CPU busy, and H = 12 ms on a quiet host;
 - stepping a plant on the bridge's clock (the hard driver's step loop) and CAN on that clock are built and tested against a fake bridge and on `vcan`; `otk-flywheel --driver hard` runs on them, and has run on the board for 60 s with H = 16, quiet and with every CPU busy, without an underrun ([docs/measurements/2026-11-27-hard-loop/](docs/measurements/2026-11-27-hard-loop/));
-- the fidelity contract is not built.
+- the fidelity contract is built: the checker in `core/` (`opentick/fidelity.h`), `otk-flywheel --fidelity`, and the Tang's file with measured numbers only (`gateware/tang_nano_20k/fidelity.csv`).
 
 **Exit criteria**
 

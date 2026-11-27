@@ -8,8 +8,9 @@
 #define OPENTICK_VERSION_H
 
 #define OTK_VERSION_MAJOR 0
-#define OTK_VERSION_MINOR 3
-#define OTK_VERSION_PATCH 1
-#define OTK_VERSION_STRING "0.3.1"
+#define OTK_VERSION_MINOR 4
+#define OTK_VERSION_PATCH 0
+#define OTK_VERSION_PRERELEASE "beta.1" /**< empty for a release */
+#define OTK_VERSION_STRING "0.4.0-beta.1"
 
 #endif /* OPENTICK_VERSION_H */
