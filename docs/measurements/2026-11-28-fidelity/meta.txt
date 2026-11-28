@@ -1,0 +1,8 @@
+date=2026-11-28 12:18:35 +0900
+open-crank commit=dee0bddf61adf4a02ab9145165b2e3c5ba430d62 (tools/board/wirecheck.py, oc-stm32g4-wirecheck)
+oc-stm32g4-wirecheck.bin md5=c67dda4bae7680427555568490b49dfb
+open-tick commit=24fb4763342fff761b35a906b522739432f2dec8 (v0.4.0-beta.1: otk-hard-probe, bridge.fs)
+bitstream md5=6659c249a3a8c779c0f7bb9cac6e6fa5
+usb_path=3-2 hubs_between_root_and_bl616=0
+host=host B, 94.5 % idle before the runs
+dut=NUCLEO-G431KB on its HSI (170 MHz from HSI16 through the PLL)

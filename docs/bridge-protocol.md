@@ -316,10 +316,11 @@ oil_pressure,to_dut,analog,1000,,2000000,,3.3
 
 **The Tang Nano 20K's file** is [`gateware/tang_nano_20k/fidelity.csv`](../gateware/tang_nano_20k/fidelity.csv). It holds only what was measured or follows from the clock. Everything else is left empty:
 - `crank` and `cam` up to 5800 Hz and 50 Hz of edges: the 60−2 wheel at 6000 rpm, counted by a NUCLEO-G431KB without a lost edge (open-crank's harness check, 2026-11-27);
-- six captures at 10 pulses a second each, the rate that check sends;
+- six captures at 25 pulses a second each, all six at once (150 a second), with none lost at 1500, 2400 and 6000 rpm: the harness check counts every pulse it sends ([measurements/2026-11-28-fidelity/](measurements/2026-11-28-fidelity/));
+- the crank's jitter, 520 ns: the largest deviation of a tooth period from its mean, as the NUCLEO-G431KB's TIM2 reads it (517.6 ns at 1500 rpm, over 79 981 teeth), rounded up. It includes the NUCLEO's own capture (one 5.9 ns tick) and, mostly, its HSI clock's frequency noise (about 200 ppm of the period at every speed), so it is an upper bound: the bridge's DDS alone is one 27 MHz tick (37 ns);
 - 37 ns of resolution: one tick of the 27 MHz clock;
 - 3.3 V: every header bank;
-- no jitter, no latency of its own, nothing for the analog outputs: not measured yet.
+- no cam jitter, no latency of its own, nothing for the analog outputs: not measured yet.
 
 ## 8. A hard run, in order
 

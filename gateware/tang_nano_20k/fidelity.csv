@@ -1,13 +1,13 @@
 # otk-fidelity 1; side=bridge; link=bl616-3mbaud; lead_ns=16000000; dut_to_plant_delay_ns=17300000; source=open-tick gateware/tang_nano_20k
 signal,direction,transport,max_rate_hz,resolution_ns,latency_ns,jitter_ns,logic_v
-crank,to_dut,rotary,5800,37,,,3.3
+crank,to_dut,rotary,5800,37,,520,3.3
 cam,to_dut,rotary,50,37,,,3.3
-capture0,from_dut,capture,10,37,,,3.3
-capture1,from_dut,capture,10,37,,,3.3
-capture2,from_dut,capture,10,37,,,3.3
-capture3,from_dut,capture,10,37,,,3.3
-capture4,from_dut,capture,10,37,,,3.3
-capture5,from_dut,capture,10,37,,,3.3
+capture0,from_dut,capture,25,37,,,3.3
+capture1,from_dut,capture,25,37,,,3.3
+capture2,from_dut,capture,25,37,,,3.3
+capture3,from_dut,capture,25,37,,,3.3
+capture4,from_dut,capture,25,37,,,3.3
+capture5,from_dut,capture,25,37,,,3.3
 analog0,to_dut,analog,,,,,
 analog1,to_dut,analog,,,,,
 analog2,to_dut,analog,,,,,
