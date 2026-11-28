@@ -40,7 +40,7 @@ rc=0
 rm -f "$out/bridge.pty"; wait
 cat "$out/hard.txt"
 [[ $rc -eq 0 ]] || fail "the ok run exited $rc"
-grep -q '^otk-flywheel: fidelity: every signal is within what the bridge guarantees (lead 160000000 ns, DUT-to-plant delay 161300000 ns' \
+grep -q '^otk-flywheel: fidelity: every signal is within what the bridge guarantees (lead 160000000 ns, DUT-to-plant delay 184200000 ns' \
     "$out/hard.txt" || fail "fidelity: the ok run's check"
 head -1 "$out/hard.budget.csv" | grep -q '^# otk-hard-budget 1; result=ok; H=16; step_ns=10000000;' || fail "budget metadata"
 grep -qx 'underruns,0,0,steps,yes' "$out/hard.budget.csv" || fail "budget: underruns"
@@ -50,7 +50,7 @@ grep -Eqx 'realtime_to_monotonic_rejected,,[0-9]+,samples,' "$out/hard.budget.cs
 if [[ ${#can[@]} -gt 0 ]]; then
     head -1 "$out/hard.frames.csv" | grep -q '; bus_clock=bridge; bus_clock_err_ns=[0-9][0-9]*;' || fail "frame log metadata"
     [[ $(grep -c ',to_dut,,100,' "$out/hard.frames.csv") -gt 150 ]] || fail "frame log: SPEED frames"
-    grep -q '^can_tx_err_p99_ns,600000,[0-9]' "$out/hard.budget.csv" || fail "budget: CAN"
+    grep -q '^can_tx_err_p99_ns,1100000,[0-9]' "$out/hard.budget.csv" || fail "budget: CAN"
     echo "hard_flywheel: CAN on $ifname checked"
 else
     echo "hard_flywheel: no CAN interface $ifname; the CAN part was not checked"
@@ -88,7 +88,7 @@ rc=0
     --fidelity "$out/too_fast.csv" --bridge-fidelity "$root/gateware/tang_nano_20k/fidelity.csv" > "$out/refused.txt" 2>&1 || rc=$?
 cat "$out/refused.txt"
 [[ $rc -eq 5 ]] || fail "fidelity: the refused run exited $rc, not 5"
-grep -q 'signal inj1 (line 4), column latency_ns: requires at most 100000000 ns; the bridge.s capture0 gives 161300000 ns' \
+grep -q 'signal inj1 (line 4), column latency_ns: requires at most 100000000 ns; the bridge.s capture0 gives 184200000 ns' \
     "$out/refused.txt" || fail "fidelity: the refusal does not name the signal and the column"
 [[ ! -e $out/refused.csv ]] || fail "fidelity: a refused run wrote a trace"
 rc=0

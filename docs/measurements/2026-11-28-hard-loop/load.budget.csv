@@ -1,0 +1,26 @@
+# otk-hard-budget 1; result=ok; H=16; step_ns=10000000; margin_ns=1200000; tick_hz=27000000; link=bl616-3mbaud; usb=3-2@480M; bitstream_md5=6659c249a3a8c779c0f7bb9cac6e6fa5; commit=b6840f0e6c4aabf107b91a2b06cbb05e5484a087; source=otk-flywheel
+quantity,declared,measured,unit,within
+steps,,6000,steps,
+exchanges,,7365,exchanges,
+underruns,0,0,steps,yes
+late_setpoints,0,0,setpoints,yes
+applied_wrong,0,0,setpoints,yes
+applied_checked,,7362,setpoints,
+timeouts,,0,attempts,
+min_fill,,15,setpoints,
+plant_lead_ns,160000000,160000000,ns,yes
+rtt_p50_ns,,1401555,ns,
+rtt_p99_ns,2200000,7127458,ns,no
+rtt_max_ns,,10404084,ns,
+dut_to_plant_delay_ns,184200000,189125864,ns,no
+capture_lag_max_ns,184200000,,ns,
+mapping_bound_ns,1000000,701575,ns,yes
+realtime_to_monotonic_err_ns,10000,852,ns,yes
+realtime_to_monotonic_rejected,,0,samples,
+bus_clock_err_ns,1010000,702427,ns,yes
+send_late_max_ns,,5306519,ns,
+cycle_ns,,5999203,ns,
+can_frames,,6000,frames,
+can_tx_err_p50_ns,,265954,ns,
+can_tx_err_p99_ns,1100000,4962441,ns,no
+can_tx_err_max_ns,,10234331,ns,

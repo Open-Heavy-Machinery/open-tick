@@ -99,6 +99,23 @@ typedef enum {
 /** @brief "ok", "degraded", "aborted". */
 const char *otk_hard_result_name(OtkHardResult r);
 
+/** @brief Why a run was aborted: the first cause the loop met. */
+typedef enum {
+    OTK_HARD_ABORT_NONE = 0,
+    OTK_HARD_ABORT_IO,             /**< reading or writing the link failed */
+    OTK_HARD_ABORT_NO_REPLY,       /**< no reply after every retransmission */
+    OTK_HARD_ABORT_BAD_REPLY,      /**< a reply of the wrong type, or one that does not decode */
+    OTK_HARD_ABORT_CRC,            /**< the request was damaged on the way every time */
+    OTK_HARD_ABORT_BRIDGE,         /**< the bridge reports it aborted (its link timeout, §3.5) */
+    OTK_HARD_ABORT_FILL,           /**< the fill before the start was not accepted whole */
+    OTK_HARD_ABORT_START,          /**< the start was refused */
+    OTK_HARD_ABORT_LAST_SETPOINTS, /**< at the stop, the last setpoints never got through */
+    OTK_HARD_ABORT_STOP            /**< the stop got no valid reply */
+} OtkHardAbort;
+
+/** @brief "none", "io", "no-reply", "bad-reply", "crc", "bridge", "fill", "start", "last-setpoints", "stop". */
+const char *otk_hard_abort_name(OtkHardAbort a);
+
 /** @brief A capture (§3.3), extended to 64 bits and placed on the bridge's step grid. */
 typedef struct {
     uint8_t channel;
@@ -123,6 +140,11 @@ typedef struct {
     double bound_end_ns;       /**< its bound at the end */
     uint64_t send_late_max_ns; /**< the latest a planned send went out */
     double cycle_ns;           /**< the forwarding cycle, as last fitted */
+    uint32_t capture_lag_max;  /**< the most steps the application had computed beyond a capture's step when it was handed over */
+    OtkHardAbort abort_reason; /**< the first cause of an abort, or none */
+    uint32_t abort_computed;   /**< steps the application had computed then */
+    uint16_t abort_error;      /**< the last reply's error bits then (OTK_BRIDGE_ERR_*) */
+    uint8_t abort_state;       /**< the last reply's bridge state then */
 } OtkHardStats;
 
 /* ---------------------------------------------------------------- REALTIME -> MONOTONIC (§4, §5) */
@@ -243,7 +265,8 @@ typedef struct {
     OtkBridgeSetpoint ring[OTK_HARD_RING];
     OtkBridgeSetpoint pending;  /**< set by otk_hard_loop_set() */
     bool have_pending;
-    uint32_t computed;          /**< steps the application has computed */
+    uint32_t computed;          /**< steps the application has computed (and, at the stop, the hold setpoints queued behind them) */
+    uint32_t app_computed;      /**< steps the application has computed: the capture lag is measured against these */
     uint32_t queued;            /**< setpoints the bridge accepted */
     /* the forwarding cycle */
     uint64_t t4[OTK_HARD_CYCLE_WINDOW];
@@ -340,6 +363,19 @@ uint64_t otk_hard_loop_rtt_pct(const OtkHardLoop *l, double p);
 
 /** @brief Frees what the loop allocated. Safe after a failed open. */
 void otk_hard_loop_free(OtkHardLoop *l);
+
+/**
+ * @brief The DUT-to-plant delay a hard run can show (docs/bridge-protocol.md §2): how many
+ *        nanoseconds of the plant's time can pass between a capture's start and the step at
+ *        which the plant receives it.
+ *
+ *        The plant runs ahead of the bridge by up to H + 1 steps at the next planned exchange,
+ *        and that exchange is up to one forwarding cycle away; a capture then waits up to one
+ *        cycle for the reply that carries it, plus that reply's round trip. So
+ *        (H + 1) x step + 2 x cycle + round trip. With H = 16, 1 ms steps, the BL616's 6 ms
+ *        cycle and a 2.2 ms round trip: 31.2 ms.
+ */
+uint64_t otk_hard_dut_to_plant_ns(unsigned h, uint64_t step_ns, uint64_t cycle_ns, uint64_t rtt_ns);
 
 /* ---------------------------------------------------------------- the budget (ROADMAP v0.4, exit criterion 3) */
 

@@ -1,0 +1,7 @@
+date=2026-11-28 19:46:46 +0900
+commit=b6840f0e6c4aabf107b91a2b06cbb05e5484a087
+cpus=20 kernel=6.8.0-149-generic
+usb_path=3-2 hubs_between_root_and_bl616=0 speed_mbps=480
+bitstream md5=6659c249a3a8c779c0f7bb9cac6e6fa5
+openFPGALoader=openFPGALoader v1.1.1
+scenario=examples/flywheel/hard60.csv H=16 step=10ms can=vcan0 (user namespace)

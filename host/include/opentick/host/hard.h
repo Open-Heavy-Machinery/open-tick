@@ -23,7 +23,10 @@
 /* ---------------------------------------------------------------- defaults (docs/bridge-protocol.md §2, §4) */
 
 #define OTK_HARD_DEFAULT_H 16u                 /**< look-ahead, steps: held with every CPU busy (C host, BL616) */
-#define OTK_HARD_DEFAULT_MARGIN_NS 600000u     /**< left before a forwarding instant, beyond the bytes' wire time */
+/** Left before a forwarding instant, beyond the bytes' wire time. 600 us held without captures (2026-11-27);
+ *  replies that carry captures missed the BL616's instant at 600 us and none did at 1200 us (2026-11-28,
+ *  open-crank's Level 2 hard runs, docs/bridge-protocol.md §9). */
+#define OTK_HARD_DEFAULT_MARGIN_NS 1200000u
 #define OTK_HARD_DEFAULT_SPIN_NS 300000u       /**< spin before a scheduled send instead of sleeping */
 
 /* ---------------------------------------------------------------- the link */

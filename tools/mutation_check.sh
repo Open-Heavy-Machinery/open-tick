@@ -325,10 +325,20 @@ mutate "fidelity: a bridge row taken twice" $FID \
     "taken[bi] = true;" "taken[bi] = false;"
 mutate "fidelity: logic_v decimals not scaled to millivolts" $FID \
     "frac *= 10u;" "frac *= 1u;"
+mutate "hard loop: the DUT-to-plant delay leaves out the second cycle" $LOOP \
+    "return ((uint64_t)h + 1u) * step_ns + 2u * cycle_ns + rtt_ns;" "return ((uint64_t)h + 1u) * step_ns + cycle_ns + rtt_ns;"
+mutate "hard loop: the capture lag counts the stop's hold setpoints" $LOOP \
+    "const uint32_t lag = l->app_computed > c->step ? l->app_computed - c->step : 0u;" "const uint32_t lag = l->computed > c->step ? l->computed - c->step : 0u;"
+mutate "hard loop: an abort's cause not kept" $LOOP \
+    "        l->stats.abort_reason = why;" "        (void)why;"
+mutate "hard loop: the capture lag never measured" $LOOP \
+    "            l->stats.capture_lag_max = lag;" "            (void)lag;"
+mutate "flywheel: the fidelity delay is H steps and a round trip only" $FLYWHEEL \
+    "otk_hard_dut_to_plant_ns(h, (uint64_t)STEP_MS * 1000000U, CYCLE_NS, rtt_ns)" "(g_fid_bridge.lead_ns + rtt_ns)"
 mutate "flywheel: a refused fidelity check runs anyway" $FLYWHEEL \
     "return v == OTK_FIDELITY_OK ? 0 : EXIT_FIDELITY;" "return 0;"
 mutate "flywheel: the fidelity delay leaves out the round trip" $FLYWHEEL \
-    "g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns + rtt_ns;" "g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns;"
+    "g_fid_bridge.dut_to_plant_delay_ns = otk_hard_dut_to_plant_ns(h, (uint64_t)STEP_MS * 1000000U, CYCLE_NS, rtt_ns);" "g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns;"
 mutate "flywheel: an aborted hard run exits 0" $FLYWHEEL \
     "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : EXIT_ABORTED;" "result == OTK_HARD_DEGRADED ? EXIT_DEGRADED : 0;"
 if [[ $can_rc -eq 0 ]]; then
