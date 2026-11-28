@@ -1,0 +1,15 @@
+== load the bridge into the Tang's SRAM
+== the bridge turns the crank at 2400 rpm for 60 s
+== 1375 injector bursts at 25 Hz
+
+ok    crank Tang 73 -> A0 (PA0)    2325 teeth/s (expected 2320), 40 gaps/s (40.0), 2405 rpm, 0 overruns
+                                   tooth period over 127954 teeth (56 s steady): mean 415779.1 ns, sd 84.3 ns, max - min 658.8 ns, largest deviation from the mean 343.8 ns
+ok    cam   Tang 74 -> A1 (PA1)    20 edges/s (expected 20.0)
+ok    inj1  D9 (PA8) -> Tang 27    1375 of 1375 pulses (25/s), mean width 100.3 us (expected 100)
+ok    inj2  D1 (PA9) -> Tang 28    1375 of 1375 pulses (25/s), mean width 200.5 us (expected 200)
+ok    inj3  D0 (PA10) -> Tang 25   1375 of 1375 pulses (25/s), mean width 300.7 us (expected 300)
+ok    inj4  D12 (PB4) -> Tang 26   1375 of 1375 pulses (25/s), mean width 401.0 us (expected 400)
+ok    inj5  D11 (PB5) -> Tang 29   1375 of 1375 pulses (25/s), mean width 501.2 us (expected 500)
+ok    inj6  D6 (PB6) -> Tang 30    1375 of 1375 pulses (25/s), mean width 601.4 us (expected 600)
+
+wirecheck: every checked line ok

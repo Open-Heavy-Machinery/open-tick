@@ -1,0 +1,14 @@
+drained 0 bytes before the first exchange
+bridge: tick 27000000 Hz, 6 captures, 4 analog outputs of 16 bits
+hold H = 16 steps (1 ms), back to back: 60003 steps, underruns 0 (0.000 %), lowest fill at a reply 15, applied setpoint wrong 0 of 10001 checked
+hold: 10002 exchanges, 0 timeouts
+  round trip us: p1 5796 p50 5993 p99 6191 max 6331
+  delay (round trip minus the bridge's own time): below 300 us 0.0 %, below 500 us 0.0 %, below 1 ms 0.0 %
+wires: crank 60-2 at 2400 rpm, cam high for half of 720 degrees, 60.0 s
+  capture 0: 1375 pulses, width us min 100.2 mean 100.3 max 102.2
+  capture 1: 1375 pulses, width us min 200.4 mean 200.5 max 202.4
+  capture 2: 1375 pulses, width us min 300.6 mean 300.7 max 302.3
+  capture 3: 1375 pulses, width us min 400.7 mean 401.0 max 402.0
+  capture 4: 1375 pulses, width us min 500.9 mean 501.2 max 502.7
+  capture 5: 1375 pulses, width us min 599.8 mean 601.4 max 602.6
+  captures lost (bridge overflow): 0
