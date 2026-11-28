@@ -2,11 +2,30 @@
 
 All notable changes to open-tick. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/), with the pre-1.0 rule that any minor release may change the API.
 
-## [Unreleased]
+## [0.4.0] (2026-11-28): the Tang Nano 20K bridge, with Level 2's ECU in the loop
+
+v0.4's four exit criteria are met. Criterion 2, the one beta.1 left open, is met through this bridge by open-crank v0.4.0: its reference engine ECU, on a NUCLEO-G431KB, synchronises on the 60−2 crank and the cam this bridge generates from the plant's angle and holds a requested speed in a closed loop, with every one of its injections captured here (open-crank `docs/measurements/2026-11-28-hil/`, open-crank#55). Those runs also found three things in the hard loop, fixed below.
 
 ### Changed
 
+- **The hard loop's default margin: 600 → 1200 µs** (`OTK_HARD_DEFAULT_MARGIN_NS`). At 600 µs, replies that carry captures missed the BL616's forwarding instant often enough to cost up to 225 underruns in a 25 s run at 1 ms steps; at 1200 µs none did. The round trip and the clock mapping's bound grow by about 0.6 and 0.4 ms; `otk-flywheel` declares 2.2 ms, 1000 µs and a CAN send error of 1100 µs ([docs/bridge-protocol.md §9](docs/bridge-protocol.md#9-the-budget-of-a-hard-run), [docs/measurements/2026-11-28-hard-loop/](docs/measurements/2026-11-28-hard-loop/)).
+- **The DUT-to-plant delay as it is** (§2): (H + 1) × step + 2 × forwarding cycle + round trip, `otk_hard_dut_to_plant_ns()`: 31.2 ms at 1 ms steps (was declared as H + a round trip, 17.3 ms; captures came up to 30 ms late). `otk-flywheel --fidelity`, the budget's `dut_to_plant_delay_ns` and `gateware/tang_nano_20k/fidelity.csv`'s metadata use it.
 - **`gateware/tang_nano_20k/fidelity.csv`**, measured again on the board ([docs/measurements/2026-11-28-fidelity/](docs/measurements/2026-11-28-fidelity/)): the six captures at 25 Hz each (was 10 Hz), none lost at 1500, 2400 and 6000 rpm with all six at once; the crank's `jitter_ns` 520 (was empty), an upper bound read by a NUCLEO-G431KB on its HSI. Open-crank's Level 2 asks for 20 Hz per cylinder and 1000 ns of crank jitter.
+
+### Added
+
+- **The captures' lag in every hard run's budget** (`capture_lag_max_ns`, `OtkHardStats.capture_lag_max`): the most steps the application had computed beyond a capture's step when the capture came in, against the declared DUT-to-plant delay.
+- **Why a run was aborted** (`OtkHardAbort`, `otk_hard_abort_name()`): the first cause, the steps computed then, and the last reply's error and state, in `OtkHardStats`, in the budget's metadata line (`abort=…`) and in `otk-flywheel`'s output. On the reference bench every abort seen was `io`: the BL616 reset its USB.
+
+### Fixed
+
+- **The first exchange after the start no longer gives way to a CAN frame.** With 1 ms steps the bridge holds only the fill's H setpoints, and a frame queued for step 0 cost one underrun a run.
+
+### Known limitations
+
+- **The BL616 resets its USB now and then** (about every 15 minutes of hard runs on the reference bench, 2026-11-28): the run under way ends `aborted` with `abort=io`. The cause is not known.
+- **At 1 ms steps with H = 16, a run is `degraded` now and then** (2 of 8 in open-crank's Level 2 runs, 3 underruns each): a sender that wakes about 1 ms late loses a forwarding cycle. A real-time priority for the sender (`SCHED_FIFO`) is a deferred improvement.
+- The analog outputs are not yet measured on a board.
 
 ## [0.4.0-beta.1] (2026-11-28): the Tang Nano 20K bridge, before Level 2's ECU
 

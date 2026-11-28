@@ -34,7 +34,8 @@ The host computes the plant ahead of the bridge and keeps the bridge's **setpoin
   - **At most one exchange fits in each BL616 cycle of about 6 ms,** so H below about 7 ms cannot hold on that link: 6 setpoints are consumed between two exchanges.
 - **What the fidelity contract declares** ([§7](#7-the-fidelity-contract-version-1)):
   - the plant's lead, H;
-  - the delay from the DUT to the plant: a capture, or a CAN frame from the DUT, reaches the plant at most H plus one round trip after it happened. On the BL616 that is about 17 ms with exchanges scheduled against its cycle (round trip p99 about 1.3 ms), and about 22 ms without.
+  - the delay from the DUT to the plant: how many steps of the plant's time can pass between a capture (or a CAN frame from the DUT) and the step at which the plant receives it. At the next planned exchange the plant is up to H + 1 steps ahead of the bridge, and that exchange is up to one forwarding cycle away; the capture then waits up to one cycle for the reply that carries it, and that reply's round trip. So **(H + 1) × step + 2 × cycle + round trip** (`otk_hard_dut_to_plant_ns()`): 31.2 ms on the BL616 at 1 ms steps (cycle 6 ms, round trip p99 2.2 ms), 184.2 ms for `otk-flywheel`'s 10 ms steps. Every hard run measures the delay its captures had (`capture_lag_max_ns`, §9): 29–30 ms in open-crank's Level 2 runs (2026-11-28).
+  - Until v0.4.0-beta.1 this delay was declared as H plus one round trip (17.3 ms); open-crank's first closed-loop runs on the board showed captures arriving up to 30 ms late, and the declaration was corrected (v0.4.0).
 - **What that delay costs.** It is dead time on the path from the DUT to the plant.
   - In a diesel, an injection turns into torque within about 4–5 ms: about 1 ms of ignition delay, then combustion up to 30–40° after top dead centre, and at 1500 rpm 1° is 0.11 ms. The plant therefore applies each injection about 13 ms later than an engine would with exchanges scheduled against the link's cycle (about 17 ms without).
   - **Mean-speed control is faithful within that dead time:** 6–18° of extra phase lag at 1–3 Hz, which the fidelity contract declares.
@@ -292,7 +293,7 @@ oil_pressure,to_dut,analog,1000,,2000000,,3.3
 - **The numbers** are whole numbers in the unit their column names. An empty cell means "no requirement" on the machine side and "not guaranteed" on the bridge side.
 - **The bridge's metadata line** carries:
   - the look-ahead H (`lead_ns`);
-  - the DUT-to-plant delay (`dut_to_plant_delay_ns`, at most H plus one round trip);
+  - the DUT-to-plant delay (`dut_to_plant_delay_ns`, §2: (H + 1) × step + 2 × cycle + round trip);
   - the link the numbers were measured on (`link`, for example `bl616-3mbaud`).
 - **`logic_v`** is in volts, with up to three decimals (`3.3`, `5`, `1.25`). Other metadata keys, such as `source`, are for people and are ignored.
 
@@ -310,7 +311,7 @@ oil_pressure,to_dut,analog,1000,,2000000,,3.3
   | `logic_v` | equal |
 
 - **The first failure** is reported: machine rows in order, then columns in the header's order. The message names the signal, its line, the column and both numbers.
-- **The runner's own lead and delay.** `lead_ns` and `dut_to_plant_delay_ns` depend on H and the step, not on the bridge alone. A runner sets them for its run before checking: `lead_ns` = H × step, `dut_to_plant_delay_ns` = that plus the declared round trip (§9). The bridge's file gives them for 1 ms steps, as reference.
+- **The runner's own lead and delay.** `lead_ns` and `dut_to_plant_delay_ns` depend on H and the step, not on the bridge alone. A runner sets them for its run before checking: `lead_ns` = H × step, `dut_to_plant_delay_ns` = `otk_hard_dut_to_plant_ns()` with the declared round trip (§2, §9). The bridge's file gives them for 1 ms steps, as reference.
 
 **The runner:** `otk-flywheel --driver hard --fidelity <machine.csv> --bridge-fidelity <bridge.csv>` checks before it opens the bridge. A refusal prints the message, exits 5 and leaves the bridge untouched; a file it cannot read exits 2.
 
@@ -349,34 +350,39 @@ The example's numbers are illustrative. Each machine and bridge writes its own; 
 
 ROADMAP v0.4, exit criterion 3: a jitter and latency budget is stated, then measured in the trace of every hard run.
 
-**Stated** for the Tang Nano 20K's BL616 link at 3 Mbaud, exchanges scheduled with 600 µs of margin, H = 16 steps, on a quiet host:
+**Stated** for the Tang Nano 20K's BL616 link at 3 Mbaud, exchanges scheduled with 1200 µs of margin (the default since v0.4.0), H = 16 steps, on a quiet host:
 
 | Quantity | Budget | Why |
 |---|---|---|
 | Plant lead | H × step: 16 ms at 1 ms steps; 160 ms for `otk-flywheel` (10 ms steps) | §2 |
 | Underruns, late setpoints | 0 | §2: H = 16 held with every CPU busy (1 in 60 000 at 1 ms steps) |
-| Round trip p99 | ≤ 1.3 ms | 1.01 ms measured at that margin |
-| DUT-to-plant delay | ≤ H × step + 1.3 ms: 17.3 ms at 1 ms steps, 161.3 ms for `otk-flywheel` | §2 |
-| Clock mapping bound (§4, symmetric) | ≤ 500 µs | 385 µs measured at that margin: every reply waits about the lead |
+| Round trip p99 | ≤ 2.2 ms | 1.70 ms measured at that margin (`otk-flywheel`), 1.91–1.95 ms in open-crank's Level 2 runs |
+| DUT-to-plant delay | ≤ (H + 1) × step + 2 × cycle + 2.2 ms (§2): 31.2 ms at 1 ms steps, 184.2 ms for `otk-flywheel` | §2 |
+| The captures' lag (`capture_lag_max_ns`) | ≤ the DUT-to-plant delay | measured: 29–30 ms at 1 ms steps (open-crank, 2026-11-28) |
+| Clock mapping bound (§4, symmetric) | ≤ 1000 µs | 804 µs measured at that margin: every reply waits about the lead |
 | REALTIME → MONOTONIC | ≤ 10 µs | §5 |
-| `bus_clock_err_ns` | ≤ 510 µs | the two above |
-| CAN send error p99 (\|`t_bus_s` − `t_s`\|) | ≤ 600 µs | the mapping's bound, plus the sender's lateness on a quiet host (p99 10–21 µs) |
+| `bus_clock_err_ns` | ≤ 1010 µs | the two above |
+| CAN send error p99 (\|`t_bus_s` − `t_s`\|) | ≤ 1100 µs | the mapping's bound, plus the sender's lateness on a quiet host |
+
+**Why 1200 µs of margin** (since v0.4.0; it was 600 µs). Replies that carry captures missed the BL616's forwarding instant at 600 µs, often enough to cost up to 225 underruns in a 25 s run at 1 ms steps with six injectors captured; at 1200 µs none did (open-crank's Level 2 runs, 2026-11-28). A later send costs round trip and mapping bound: about 0.6 ms and 0.4 ms more.
+
+**A run that was aborted says why** (since v0.4.0): its budget's metadata line carries `abort=` (`io`, `no-reply`, `bad-reply`, `crc`, `bridge`, `fill`, `start`, `last-setpoints` or `stop`), the steps computed then, and the last reply's error and state. On the reference bench every abort seen so far was `io`: the BL616 reset its USB (the kernel logs `USB disconnect`), about every 15 minutes of running, cause not known.
 
 With every CPU busy, the sender wakes up to about 2 ms late (p99). The round trip and the CAN send error are then not expected to hold, and the run's budget file shows which rows did not.
 
 **Measured** in every hard run, and written next to its trace (`out.budget.csv` for `out.csv`):
 
 ```
-# otk-hard-budget 1; result=ok; H=16; step_ns=10000000; margin_ns=600000; tick_hz=27000000; link=bl616-3mbaud; usb=3-2@480M; bitstream_md5=…; commit=…; source=otk-flywheel
+# otk-hard-budget 1; result=ok; H=16; step_ns=10000000; margin_ns=1200000; tick_hz=27000000; link=bl616-3mbaud; usb=3-2@480M; bitstream_md5=…; commit=…; source=otk-flywheel
 quantity,declared,measured,unit,within
 underruns,0,0,steps,yes
-rtt_p99_ns,1300000,1010000,ns,yes
-mapping_bound_ns,500000,385000,ns,yes
+rtt_p99_ns,2200000,1700000,ns,yes
+mapping_bound_ns,1000000,804000,ns,yes
 …
 ```
 
 - **Line 1, metadata:**
-  - `result`: `ok`, `degraded` or `aborted`;
+  - `result`: `ok`, `degraded` or `aborted`; when aborted, `abort`, `abort_computed`, `abort_error` and `abort_state`;
   - H and the margin;
   - `link`, and the USB path as sysfs names it, with its speed (a hub on the way shows as a dot, for example `3-2.1`);
   - the bitstream's md5 and the commit, as the runner gives them.
@@ -386,11 +392,29 @@ mapping_bound_ns,500000,385000,ns,yes
 - **The rows:**
   - bridge steps, exchanges;
   - underruns, late setpoints, applied setpoints checked and wrong, timeouts, the lowest buffer fill;
-  - the plant's lead, round trip p50/p99/max, the DUT-to-plant delay;
+  - the plant's lead, round trip p50/p99/max, the DUT-to-plant delay (declared with the guessed cycle and the declared round trip; measured with the fitted cycle and the round trip's p99), and the captures' lag (`capture_lag_max_ns`: the most steps the application had computed beyond a capture's step when the capture came in);
   - the mapping's largest bound during the run, REALTIME → MONOTONIC and its samples dropped (§5), `bus_clock_err_ns`;
   - the latest planned send, the forwarding cycle;
   - with CAN: frames, and the CAN send error p50/p99/max.
 - The numbers in the example above are illustrative.
+
+**Measured on the board at the 1.2 ms margin** (2026-11-28, [measurements/2026-11-28-hard-loop/](measurements/2026-11-28-hard-loop/)): `otk-flywheel --driver hard`, 60 s (6000 steps of 10 ms), H = 16, CAN on `vcan0`, the Tang on a root port of `david-asus`, the bridge reprogrammed before each run, open-tick `b6840f0`. Rows above their budget are in bold.
+
+| Quantity | Budget | Quiet host | 20 busy loops |
+|---|---|---|---|
+| Result | | `ok` | `ok` |
+| Underruns, late setpoints, wrong applied setpoints | 0 | 0, 0, 0 | 0, 0, 0 |
+| Lowest buffer fill | | 16 | 15 |
+| Round trip p50 / p99 | p99 ≤ 2.2 ms | 1.49 / 1.70 ms | 1.40 ms / **7.13 ms** |
+| DUT-to-plant delay | ≤ 184.2 ms | 183.7 ms | **189.1 ms** |
+| Clock mapping bound | ≤ 1000 µs | 804 µs | 702 µs |
+| REALTIME → MONOTONIC | ≤ 10 µs | 1.5 µs | 0.9 µs |
+| `bus_clock_err_ns` | ≤ 1010 µs | 806 µs | 702 µs |
+| CAN send error p99 | ≤ 1100 µs | 698 µs | **4.96 ms** |
+
+- As at 600 µs, the round trip and the CAN send error are over their budget with every CPU busy, as stated.
+- A first quiet run that day ended `aborted` with `abort=io`: the BL616 reset its USB at step 3595. It is kept out of the table and named here.
+- At 1 ms steps, with captures, see open-crank's Level 2 runs (open-crank `docs/measurements/2026-11-28-hil/`): every round trip p99 1.91–1.95 ms, mapping bound 0.66–0.73 ms, CAN send error p99 0.58–0.63 ms, the captures' lag 29–30 ms.
 
 **Measured on the board** (2026-11-27, [measurements/2026-11-27-hard-loop/](measurements/2026-11-27-hard-loop/)): `otk-flywheel --driver hard`, 60 s (6000 steps of 10 ms), H = 16, CAN on `vcan0`, BL616 on a root port of host B, the bridge reprogrammed before each run. Rows above their budget are in bold.
 
