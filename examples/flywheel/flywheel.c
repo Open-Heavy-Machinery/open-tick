@@ -828,6 +828,10 @@ int main(int argc, char **argv) {
                (double)otk_hard_loop_rtt_pct(&g_hard, 50.0) / 1e3, (double)otk_hard_loop_rtt_pct(&g_hard, 99.0) / 1e3,
                st->bound_max_ns / 1e3, (unsigned long long)otk_rt_mono_err_ns(&g_hard.rt),
                (unsigned long long)g_hard.rt.rejected, budget_path);
+        if (st->abort_reason != OTK_HARD_ABORT_NONE) {
+            printf("otk-flywheel: aborted: %s, with %u steps computed; the last reply's error 0x%04x, state %u\n",
+                   otk_hard_abort_name(st->abort_reason), st->abort_computed, st->abort_error, st->abort_state);
+        }
         if (g_hard_oom) {
             fprintf(stderr, "otk-flywheel: out of memory: the frame log or the CAN figures are incomplete\n");
             hard_rc = 1;

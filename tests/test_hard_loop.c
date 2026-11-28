@@ -115,6 +115,7 @@ static void test_run_ok(void) {
     CHECK(hl.stats.bound_max_ns > 0.0 && hl.stats.bound_max_ns < 2000000.0);
     CHECK(otk_hard_loop_rtt_pct(&hl, 50) > 0u && otk_hard_loop_rtt_pct(&hl, 99) < 5000000u);
     CHECK(hl.stats.seq_errors == 0u && hl.stats.timeouts == 0u);
+    CHECK(hl.stats.abort_reason == OTK_HARD_ABORT_NONE);
     /* the budget file */
     FILE *fp = tmpfile();
     OtkHardBudget b;
@@ -200,6 +201,17 @@ static void test_silence_is_aborted(void) {
     CHECK(hl.aborted && hl.computed < 400u);
     CHECK(hl.link.timeouts == c.retries + 1u); /* one request, sent 1 + retries times */
     CHECK(!f.stopped);
+    /* the cause is kept, and the budget's metadata names it */
+    CHECK(hl.stats.abort_reason == OTK_HARD_ABORT_NO_REPLY && strcmp(otk_hard_abort_name(OTK_HARD_ABORT_NO_REPLY), "no-reply") == 0);
+    CHECK(hl.stats.abort_computed > 0u && hl.stats.abort_computed <= hl.computed);
+    FILE *fp = tmpfile();
+    OtkHardBudget b;
+    otk_hard_budget_none(&b);
+    CHECK(otk_hard_budget_write(fp, &hl, OTK_HARD_ABORTED, &b, NULL, NULL));
+    rewind(fp);
+    char line[512];
+    CHECK(fgets(line, sizeof(line), fp) != NULL && strncmp(line, "# otk-hard-budget 1; result=aborted; abort=no-reply; ", 53) == 0);
+    fclose(fp);
     otk_hard_loop_free(&hl);
 }
 

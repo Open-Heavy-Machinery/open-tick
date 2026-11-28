@@ -211,6 +211,21 @@ bool otk_hard_can_send_at(OtkSocketCan *s, const OtkCanFrame *f, uint64_t host_n
     return otk_socketcan_send(s, f);
 }
 
+/* Marks the run aborted; the first cause is kept, with what the last reply said. */
+static void abort_run(OtkHardLoop *l, OtkHardAbort why) {
+    if (l->stats.abort_reason == OTK_HARD_ABORT_NONE) {
+        l->stats.abort_reason = why;
+        l->stats.abort_computed = l->computed;
+    }
+    l->aborted = true;
+}
+
+const char *otk_hard_abort_name(OtkHardAbort a) {
+    static const char *const names[] = { "none",  "io",   "no-reply", "bad-reply",      "crc",
+                                         "bridge", "fill", "start",   "last-setpoints", "stop" };
+    return (unsigned)a < sizeof(names) / sizeof(names[0]) ? names[a] : "?";
+}
+
 /* ---------------------------------------------------------------- one request, retried */
 
 /* 0 with a reply; 1 if none came after every retransmission; -1 on an I/O error. */
@@ -300,22 +315,26 @@ static int exchange(OtkHardLoop *l, uint32_t first, unsigned n, OtkBridgeReply *
     for (unsigned attempt = 0;; attempt++) {
         const int rc = xact(l, OTK_BRIDGE_EXCHANGE, p, len, &r);
         if (rc < 0) {
+            abort_run(l, OTK_HARD_ABORT_IO);
             return -1;
         }
         if (rc > 0) {
-            l->aborted = true; /* no reply: the bridge has timed the link out by now (§3.5) */
+            abort_run(l, OTK_HARD_ABORT_NO_REPLY); /* the bridge has timed the link out by now (§3.5) */
             return 1;
         }
         if (r.type != (OTK_BRIDGE_EXCHANGE | OTK_BRIDGE_REPLY) || !otk_bridge_decode_reply(r.payload, r.len, d)) {
+            abort_run(l, OTK_HARD_ABORT_BAD_REPLY);
             return -1;
         }
+        l->stats.abort_error = d->error;
+        l->stats.abort_state = d->state;
         if ((d->error & OTK_BRIDGE_ERR_CRC) == 0u) {
             break;
         }
         /* the request was damaged on the way: nothing was applied, send it again */
         l->stats.crc_errors++;
         if (attempt >= l->cfg.retries) {
-            l->aborted = true;
+            abort_run(l, OTK_HARD_ABORT_CRC);
             return 1;
         }
     }
@@ -330,7 +349,7 @@ static int exchange(OtkHardLoop *l, uint32_t first, unsigned n, OtkBridgeReply *
     l->aim.drift = l->sync.fitted ? l->sync.b : 0.0;
 
     if ((d->error & OTK_BRIDGE_ERR_ABORTED) != 0u || d->state == OTK_BRIDGE_ABORTED) {
-        l->aborted = true;
+        abort_run(l, OTK_HARD_ABORT_BRIDGE);
         return 1;
     }
     if ((d->error & OTK_BRIDGE_ERR_SEQUENCE) != 0u) {
@@ -573,14 +592,14 @@ static uint64_t next_can_due(const OtkHardLoop *l) {
 static bool fill_and_start(OtkHardLoop *l) {
     OtkBridgeReply d;
     if (exchange(l, 0u, l->cfg.h, &d) != 0 || d.error != 0u || l->queued != l->cfg.h) {
-        l->aborted = true;
+        abort_run(l, OTK_HARD_ABORT_FILL);
         return false;
     }
     OtkHardReply r;
     OtkBridgeStartReply sr;
     if (control(l, OTK_BRIDGE_START, NULL, 0u, &r) != 0 || !otk_bridge_decode_start_reply(r.payload, r.len, &sr) ||
         sr.status != OTK_BRIDGE_STATUS_OK) {
-        l->aborted = true;
+        abort_run(l, OTK_HARD_ABORT_START);
         return false;
     }
     l->aim.t_start = sr.t_start;
@@ -621,7 +640,7 @@ static bool scheduled_exchange(OtkHardLoop *l, uint64_t plan) {
     OtkBridgeReply d;
     const int rc = exchange(l, l->queued, n, &d);
     if (rc != 0) {
-        l->aborted = true;
+        abort_run(l, OTK_HARD_ABORT_IO); /* the exchange set its own cause first */
         return false;
     }
     return true;
@@ -683,7 +702,7 @@ OtkHardResult otk_hard_loop_stop(OtkHardLoop *l) {
                 break;
             }
             if (now > give_up || !scheduled_exchange(l, plan)) {
-                l->aborted = true; /* the last setpoints never got through */
+                abort_run(l, OTK_HARD_ABORT_LAST_SETPOINTS); /* unless the exchange set its own cause first */
                 break;
             }
         }
@@ -696,7 +715,7 @@ OtkHardResult otk_hard_loop_stop(OtkHardLoop *l) {
                 l->stats.steps = st.step;
                 l->stats.underruns = st.underruns;
             } else {
-                l->aborted = true;
+                abort_run(l, OTK_HARD_ABORT_STOP);
             }
         }
     }
@@ -812,9 +831,15 @@ bool otk_hard_budget_write(FILE *fp, const OtkHardLoop *l, OtkHardResult result,
     }
     const uint64_t step_ns = (uint64_t)llround((double)l->cfg.bridge.step_ticks * 1e9 / (double)l->caps.tick_hz);
     const uint64_t lead_ns = step_ns * l->cfg.h;
-    fprintf(fp, "# otk-hard-budget 1; result=%s; H=%u; step_ns=%llu; margin_ns=%llu; tick_hz=%u; link=%s; usb=%s; "
+    char why[96] = "";
+    if (l->stats.abort_reason != OTK_HARD_ABORT_NONE) {
+        snprintf(why, sizeof(why), "; abort=%s; abort_computed=%u; abort_error=0x%04x; abort_state=%u",
+                 otk_hard_abort_name(l->stats.abort_reason), l->stats.abort_computed, l->stats.abort_error,
+                 l->stats.abort_state);
+    }
+    fprintf(fp, "# otk-hard-budget 1; result=%s%s; H=%u; step_ns=%llu; margin_ns=%llu; tick_hz=%u; link=%s; usb=%s; "
                 "bitstream_md5=%s; commit=%s; source=%s\n",
-            otk_hard_result_name(result), l->cfg.h, (unsigned long long)step_ns, (unsigned long long)l->cfg.margin_ns,
+            otk_hard_result_name(result), why, l->cfg.h, (unsigned long long)step_ns, (unsigned long long)l->cfg.margin_ns,
             l->caps.tick_hz, meta->link ? meta->link : "", meta->usb ? meta->usb : "",
             meta->bitstream_md5 ? meta->bitstream_md5 : "", meta->commit ? meta->commit : "",
             meta->source ? meta->source : "");

@@ -327,6 +327,8 @@ mutate "fidelity: logic_v decimals not scaled to millivolts" $FID \
     "frac *= 10u;" "frac *= 1u;"
 mutate "hard loop: the DUT-to-plant delay leaves out the second cycle" $LOOP \
     "return ((uint64_t)h + 1u) * step_ns + 2u * cycle_ns + rtt_ns;" "return ((uint64_t)h + 1u) * step_ns + cycle_ns + rtt_ns;"
+mutate "hard loop: an abort's cause not kept" $LOOP \
+    "        l->stats.abort_reason = why;" "        (void)why;"
 mutate "hard loop: the capture lag never measured" $LOOP \
     "l->stats.capture_lag_max = l->computed - c->step;" "(void)c;"
 mutate "flywheel: the fidelity delay is H steps and a round trip only" $FLYWHEEL \
