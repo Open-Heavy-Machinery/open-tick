@@ -50,7 +50,7 @@ grep -Eqx 'realtime_to_monotonic_rejected,,[0-9]+,samples,' "$out/hard.budget.cs
 if [[ ${#can[@]} -gt 0 ]]; then
     head -1 "$out/hard.frames.csv" | grep -q '; bus_clock=bridge; bus_clock_err_ns=[0-9][0-9]*;' || fail "frame log metadata"
     [[ $(grep -c ',to_dut,,100,' "$out/hard.frames.csv") -gt 150 ]] || fail "frame log: SPEED frames"
-    grep -q '^can_tx_err_p99_ns,600000,[0-9]' "$out/hard.budget.csv" || fail "budget: CAN"
+    grep -q '^can_tx_err_p99_ns,1100000,[0-9]' "$out/hard.budget.csv" || fail "budget: CAN"
     echo "hard_flywheel: CAN on $ifname checked"
 else
     echo "hard_flywheel: no CAN interface $ifname; the CAN part was not checked"

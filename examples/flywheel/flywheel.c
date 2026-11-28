@@ -398,9 +398,9 @@ static OtkHardBudget declared_budget(void) {
     b.underruns = 0U;
     b.late = 0U;
     b.rtt_p99_ns = 2200000U;       /* scheduled against the cycle, 1200 us margin (docs/bridge-protocol.md §9) */
-    b.mapping_bound_ns = 500000U;  /* 385 us measured at that margin */
+    b.mapping_bound_ns = 1000000U; /* 790 us measured at that margin: every reply waits about the lead */
     b.realtime_err_ns = 10000U;
-    b.can_tx_err_ns = 600000U;     /* the mapping's bound plus the sender's lateness on a quiet host */
+    b.can_tx_err_ns = 1100000U;    /* the mapping's bound plus the sender's lateness on a quiet host */
     return b;
 }
 
