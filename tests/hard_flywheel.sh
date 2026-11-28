@@ -40,7 +40,7 @@ rc=0
 rm -f "$out/bridge.pty"; wait
 cat "$out/hard.txt"
 [[ $rc -eq 0 ]] || fail "the ok run exited $rc"
-grep -q '^otk-flywheel: fidelity: every signal is within what the bridge guarantees (lead 160000000 ns, DUT-to-plant delay 161300000 ns' \
+grep -q '^otk-flywheel: fidelity: every signal is within what the bridge guarantees (lead 160000000 ns, DUT-to-plant delay 184200000 ns' \
     "$out/hard.txt" || fail "fidelity: the ok run's check"
 head -1 "$out/hard.budget.csv" | grep -q '^# otk-hard-budget 1; result=ok; H=16; step_ns=10000000;' || fail "budget metadata"
 grep -qx 'underruns,0,0,steps,yes' "$out/hard.budget.csv" || fail "budget: underruns"
@@ -88,7 +88,7 @@ rc=0
     --fidelity "$out/too_fast.csv" --bridge-fidelity "$root/gateware/tang_nano_20k/fidelity.csv" > "$out/refused.txt" 2>&1 || rc=$?
 cat "$out/refused.txt"
 [[ $rc -eq 5 ]] || fail "fidelity: the refused run exited $rc, not 5"
-grep -q 'signal inj1 (line 4), column latency_ns: requires at most 100000000 ns; the bridge.s capture0 gives 161300000 ns' \
+grep -q 'signal inj1 (line 4), column latency_ns: requires at most 100000000 ns; the bridge.s capture0 gives 184200000 ns' \
     "$out/refused.txt" || fail "fidelity: the refusal does not name the signal and the column"
 [[ ! -e $out/refused.csv ]] || fail "fidelity: a refused run wrote a trace"
 rc=0

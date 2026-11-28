@@ -123,6 +123,7 @@ typedef struct {
     double bound_end_ns;       /**< its bound at the end */
     uint64_t send_late_max_ns; /**< the latest a planned send went out */
     double cycle_ns;           /**< the forwarding cycle, as last fitted */
+    uint32_t capture_lag_max;  /**< the most steps the application had computed beyond a capture's step when it was handed over */
 } OtkHardStats;
 
 /* ---------------------------------------------------------------- REALTIME -> MONOTONIC (§4, §5) */
@@ -340,6 +341,19 @@ uint64_t otk_hard_loop_rtt_pct(const OtkHardLoop *l, double p);
 
 /** @brief Frees what the loop allocated. Safe after a failed open. */
 void otk_hard_loop_free(OtkHardLoop *l);
+
+/**
+ * @brief The DUT-to-plant delay a hard run can show (docs/bridge-protocol.md §2): how many
+ *        nanoseconds of the plant's time can pass between a capture's start and the step at
+ *        which the plant receives it.
+ *
+ *        The plant runs ahead of the bridge by up to H + 1 steps at the next planned exchange,
+ *        and that exchange is up to one forwarding cycle away; a capture then waits up to one
+ *        cycle for the reply that carries it, plus that reply's round trip. So
+ *        (H + 1) x step + 2 x cycle + round trip. With H = 16, 1 ms steps, the BL616's 6 ms
+ *        cycle and a 2.2 ms round trip: 31.2 ms.
+ */
+uint64_t otk_hard_dut_to_plant_ns(unsigned h, uint64_t step_ns, uint64_t cycle_ns, uint64_t rtt_ns);
 
 /* ---------------------------------------------------------------- the budget (ROADMAP v0.4, exit criterion 3) */
 

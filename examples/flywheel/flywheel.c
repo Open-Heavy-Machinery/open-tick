@@ -90,6 +90,7 @@
 #define FULL_SCALE_RPM 3000.0 /* analog output 0: the speed as a fraction of this */
 #define EXIT_DEGRADED 3
 #define EXIT_ABORTED 4
+#define CYCLE_NS 6000000U /* the BL616's forwarding cycle, as the hard loop's guess (§4.1) */
 #define EXIT_FIDELITY 5 /* --fidelity: the machine requires more than the bridge guarantees */
 
 /* ---- Signals the scenario can set ---------------------------------------- */
@@ -336,10 +337,10 @@ static int check_fidelity(const char *machine_path, const char *bridge_path, uns
     if (!read_fidelity(machine_path, &g_fid_machine) || !read_fidelity(bridge_path, &g_fid_bridge)) {
         return 2;
     }
-    /* the lead and the delay are this run's (§7): H steps, and one round trip more */
+    /* the lead and the delay are this run's (§7): H steps; and the delay a capture can have (§2) */
     g_fid_bridge.has_lead = g_fid_bridge.has_delay = true;
     g_fid_bridge.lead_ns = (uint64_t)h * STEP_MS * 1000000U;
-    g_fid_bridge.dut_to_plant_delay_ns = g_fid_bridge.lead_ns + rtt_ns;
+    g_fid_bridge.dut_to_plant_delay_ns = otk_hard_dut_to_plant_ns(h, (uint64_t)STEP_MS * 1000000U, CYCLE_NS, rtt_ns);
     OtkFidelityResult r;
     char msg[512];
     const OtkFidelityVerdict v = otk_fidelity_check(&g_fid_machine, &g_fid_bridge, &r);
@@ -396,7 +397,7 @@ static OtkHardBudget declared_budget(void) {
     otk_hard_budget_none(&b);
     b.underruns = 0U;
     b.late = 0U;
-    b.rtt_p99_ns = 1300000U;       /* scheduled against the cycle, 600 us margin: p99 1.01 ms measured */
+    b.rtt_p99_ns = 2200000U;       /* scheduled against the cycle, 1200 us margin (docs/bridge-protocol.md §9) */
     b.mapping_bound_ns = 500000U;  /* 385 us measured at that margin */
     b.realtime_err_ns = 10000U;
     b.can_tx_err_ns = 600000U;     /* the mapping's bound plus the sender's lateness on a quiet host */

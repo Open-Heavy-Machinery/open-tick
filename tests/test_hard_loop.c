@@ -127,17 +127,20 @@ static void test_run_ok(void) {
     rewind(fp);
     char line[512];
     CHECK(fgets(line, sizeof(line), fp) != NULL);
-    CHECK(strncmp(line, "# otk-hard-budget 1; result=ok; H=16; step_ns=5000000; margin_ns=600000; tick_hz=27000000; "
+    CHECK(strncmp(line, "# otk-hard-budget 1; result=ok; H=16; step_ns=5000000; margin_ns=1200000; tick_hz=27000000; "
                         "link=fake-pty; usb=none; bitstream_md5=0123abcd; commit=deadbee; source=test_hard_loop\n",
                   sizeof(line)) == 0);
     CHECK(fgets(line, sizeof(line), fp) != NULL && strcmp(line, "quantity,declared,measured,unit,within\n") == 0);
-    bool saw_underruns = false, saw_lead = false, saw_rtt = false;
+    bool saw_underruns = false, saw_lead = false, saw_rtt = false, saw_delay = false, saw_lag = false;
     while (fgets(line, sizeof(line), fp) != NULL) {
         saw_underruns |= strcmp(line, "underruns,0,0,steps,yes\n") == 0;
         saw_lead |= strcmp(line, "plant_lead_ns,80000000,80000000,ns,yes\n") == 0;
         saw_rtt |= strncmp(line, "rtt_p99_ns,5000000,", 19) == 0 && strstr(line, ",ns,yes\n") != NULL;
+        /* declared: (16 + 1) x 5 ms + 2 x the 2 ms cycle guess + the 5 ms round trip */
+        saw_delay |= strncmp(line, "dut_to_plant_delay_ns,94000000,", 31) == 0 && strstr(line, ",ns,yes\n") != NULL;
+        saw_lag |= strcmp(line, "capture_lag_max_ns,94000000,,ns,\n") == 0; /* no capture in this run */
     }
-    CHECK(saw_underruns && saw_lead && saw_rtt);
+    CHECK(saw_underruns && saw_lead && saw_rtt && saw_delay && saw_lag);
     fclose(fp);
     /* a value that would break the metadata line is refused */
     const OtkHardRunMeta bad = { "a;b", NULL, NULL, NULL, NULL };
@@ -215,7 +218,16 @@ static void test_capture_has_its_step(void) {
         CHECK(caps[0].channel == 2u && caps[0].width == 5000u && caps[0].step == 25u);
         CHECK(caps[0].start_tick == f.t_start + 25u * STEP_TICKS + 1000u); /* extended to 64 bits exactly */
     }
+    /* the plant was at least H steps on when it got the capture, and within the declared delay */
+    const uint64_t bound = otk_hard_dut_to_plant_ns(c.h, 5000000u, 2000000u, otk_hard_loop_rtt_pct(&hl, 100.0));
+    CHECK(hl.stats.capture_lag_max >= c.h && (uint64_t)hl.stats.capture_lag_max * 5000000u <= bound);
     otk_hard_loop_free(&hl);
+}
+
+static void test_dut_to_plant(void) {
+    /* (H + 1) x step + 2 x cycle + round trip: H = 16, 1 ms steps, the BL616's 6 ms, 2.2 ms */
+    CHECK(otk_hard_dut_to_plant_ns(16u, 1000000u, 6000000u, 2200000u) == 31200000u);
+    CHECK(otk_hard_dut_to_plant_ns(0u, 10000000u, 0u, 0u) == 10000000u);
 }
 
 static void test_refuses_a_used_bridge(void) {
@@ -370,6 +382,7 @@ static void test_driver_names(void) {
 }
 
 int main(void) {
+    RUN_TEST(test_dut_to_plant);
     RUN_TEST(test_aim);
     RUN_TEST(test_rt_mono);
     RUN_TEST(test_rt_mono_width);

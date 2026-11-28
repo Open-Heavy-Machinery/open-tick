@@ -276,6 +276,9 @@ static void take_captures(OtkHardLoop *l, const OtkBridgeReply *d) {
         const uint64_t since = tick > l->aim.t_start ? tick - l->aim.t_start : 0u;
         const uint64_t step = since / l->cfg.bridge.step_ticks;
         c->step = step > UINT32_MAX ? UINT32_MAX : (uint32_t)step;
+        if (l->computed > c->step && l->computed - c->step > l->stats.capture_lag_max) {
+            l->stats.capture_lag_max = l->computed - c->step; /* the plant's step when it gets it, less the capture's */
+        }
     }
 }
 
@@ -582,6 +585,11 @@ static bool fill_and_start(OtkHardLoop *l) {
     }
     l->aim.t_start = sr.t_start;
     l->started = true;
+    /* The first exchange after the start never gives way to a CAN frame: the buffer holds only
+     * the H setpoints of the fill, and the start's own reply may have waited a whole cycle. Frames
+     * queued during the fill for the first steps go out after it, late (2026-11-28: with 1 ms
+     * steps and a TSC1 queued for step 0, giving way here cost one underrun a run). */
+    l->can_skipped = true;
     return true;
 }
 
@@ -784,6 +792,10 @@ static void row(FILE *fp, const char *q, uint64_t declared, uint64_t measured, c
     fputc('\n', fp);
 }
 
+uint64_t otk_hard_dut_to_plant_ns(unsigned h, uint64_t step_ns, uint64_t cycle_ns, uint64_t rtt_ns) {
+    return ((uint64_t)h + 1u) * step_ns + 2u * cycle_ns + rtt_ns;
+}
+
 static uint64_t ceil_u64(double x) {
     return isfinite(x) && x >= 0.0 ? (uint64_t)ceil(x) : UINT64_MAX;
 }
@@ -822,8 +834,16 @@ bool otk_hard_budget_write(FILE *fp, const OtkHardLoop *l, OtkHardResult result,
     row(fp, "rtt_p50_ns", UINT64_MAX, p50, "ns");
     row(fp, "rtt_p99_ns", declared->rtt_p99_ns, p99, "ns");
     row(fp, "rtt_max_ns", UINT64_MAX, pmax, "ns");
-    row(fp, "dut_to_plant_delay_ns", declared->rtt_p99_ns == UINT64_MAX ? UINT64_MAX : lead_ns + declared->rtt_p99_ns,
-        p99 == UINT64_MAX ? UINT64_MAX : lead_ns + p99, "ns");
+    /* declared with the guessed cycle; the bound with the fitted one; and the delay the captures had */
+    const uint64_t guess_cycle = ceil_u64(l->cfg.cycle_guess_ns);
+    const uint64_t fit_cycle = ceil_u64(l->stats.cycle_ns > 0.0 ? l->stats.cycle_ns : l->cfg.cycle_guess_ns);
+    const uint64_t declared_delay = declared->rtt_p99_ns == UINT64_MAX
+                                        ? UINT64_MAX
+                                        : otk_hard_dut_to_plant_ns(l->cfg.h, step_ns, guess_cycle, declared->rtt_p99_ns);
+    row(fp, "dut_to_plant_delay_ns", declared_delay,
+        p99 == UINT64_MAX ? UINT64_MAX : otk_hard_dut_to_plant_ns(l->cfg.h, step_ns, fit_cycle, p99), "ns");
+    row(fp, "capture_lag_max_ns", declared_delay,
+        l->stats.capture_lag_max == 0u ? UINT64_MAX : (uint64_t)l->stats.capture_lag_max * step_ns, "ns");
     row(fp, "mapping_bound_ns", declared->mapping_bound_ns, ceil_u64(l->stats.bound_max_ns), "ns");
     row(fp, "realtime_to_monotonic_err_ns", declared->realtime_err_ns, otk_rt_mono_err_ns(&l->rt), "ns");
     row(fp, "realtime_to_monotonic_rejected", UINT64_MAX, l->rt.rejected, "samples");
