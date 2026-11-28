@@ -265,7 +265,8 @@ typedef struct {
     OtkBridgeSetpoint ring[OTK_HARD_RING];
     OtkBridgeSetpoint pending;  /**< set by otk_hard_loop_set() */
     bool have_pending;
-    uint32_t computed;          /**< steps the application has computed */
+    uint32_t computed;          /**< steps the application has computed (and, at the stop, the hold setpoints queued behind them) */
+    uint32_t app_computed;      /**< steps the application has computed: the capture lag is measured against these */
     uint32_t queued;            /**< setpoints the bridge accepted */
     /* the forwarding cycle */
     uint64_t t4[OTK_HARD_CYCLE_WINDOW];

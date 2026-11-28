@@ -291,8 +291,10 @@ static void take_captures(OtkHardLoop *l, const OtkBridgeReply *d) {
         const uint64_t since = tick > l->aim.t_start ? tick - l->aim.t_start : 0u;
         const uint64_t step = since / l->cfg.bridge.step_ticks;
         c->step = step > UINT32_MAX ? UINT32_MAX : (uint32_t)step;
-        if (l->computed > c->step && l->computed - c->step > l->stats.capture_lag_max) {
-            l->stats.capture_lag_max = l->computed - c->step; /* the plant's step when it gets it, less the capture's */
+        /* the plant's step when it gets it, less the capture's; not the stop's hold setpoints */
+        const uint32_t lag = l->app_computed > c->step ? l->app_computed - c->step : 0u;
+        if (lag > l->stats.capture_lag_max) {
+            l->stats.capture_lag_max = lag;
         }
     }
 }
@@ -656,6 +658,7 @@ bool otk_hard_loop_next(OtkHardLoop *l) {
                                                     : (OtkBridgeSetpoint){ 0u, { 0u, 0u, 0u, 0u } };
     l->ring[l->computed % OTK_HARD_RING] = sp;
     l->computed++;
+    l->app_computed = l->computed;
     l->have_pending = false;
     if (!l->started) {
         if (l->computed < l->cfg.h) {

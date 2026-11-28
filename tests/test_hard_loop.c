@@ -236,6 +236,22 @@ static void test_capture_has_its_step(void) {
     otk_hard_loop_free(&hl);
 }
 
+/* A capture near the end comes in during the stop: its lag is counted against the application's steps,
+ * not the hold setpoints the stop queues behind them. */
+static void test_capture_lag_at_the_stop(void) {
+    static FakeBridge f;
+    fake_init(&f);
+    f.capture_at = 38u;
+    OtkHardLoopConfig c;
+    config(&c);
+    static OtkHardLoop hl;
+    OtkHardCapture caps[8];
+    size_t n = 0;
+    CHECK(run(&f, &hl, &c, 40u, caps, &n) == OTK_HARD_OK);
+    CHECK(hl.stats.capture_lag_max >= 1u && hl.stats.capture_lag_max <= 40u - 38u);
+    otk_hard_loop_free(&hl);
+}
+
 static void test_dut_to_plant(void) {
     /* (H + 1) x step + 2 x cycle + round trip: H = 16, 1 ms steps, the BL616's 6 ms, 2.2 ms */
     CHECK(otk_hard_dut_to_plant_ns(16u, 1000000u, 6000000u, 2200000u) == 31200000u);
@@ -395,6 +411,7 @@ static void test_driver_names(void) {
 
 int main(void) {
     RUN_TEST(test_dut_to_plant);
+    RUN_TEST(test_capture_lag_at_the_stop);
     RUN_TEST(test_aim);
     RUN_TEST(test_rt_mono);
     RUN_TEST(test_rt_mono_width);
